@@ -655,6 +655,81 @@ struct CostaImageBackground: View {
     }
 }
 
+// MARK: - StyledNumericKeypad
+//
+// A custom 3x4 numeric keypad (with a "000" quick-zeros key and a
+// backspace key) for money-entry screens that want a fully custom look
+// instead of the system keyboard.
+struct StyledNumericKeypad: View {
+    let onDigit: (String) -> Void
+    let onBackspace: () -> Void
+
+    private let rows: [[String]] = [
+        ["1", "2", "3"],
+        ["4", "5", "6"],
+        ["7", "8", "9"],
+        ["000", "0", "⌫"]
+    ]
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ForEach(rows, id: \.self) { row in
+                HStack(spacing: 12) {
+                    ForEach(row, id: \.self) { key in
+                        keyButton(key)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func keyButton(_ key: String) -> some View {
+        Button {
+            if key == "⌫" {
+                onBackspace()
+            } else {
+                onDigit(key)
+            }
+        } label: {
+            Group {
+                if key == "⌫" {
+                    Image(systemName: "delete.left")
+                } else {
+                    Text(key)
+                }
+            }
+            .font(.title2.weight(.medium))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 60)
+            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - StyledAmountChip
+//
+// A quick-pick pill for preset amounts (e.g. "Rp 50.000") shown in a
+// horizontal scroll row above a numeric keypad.
+struct StyledAmountChip: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.08), in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - Previews
 
 #Preview("StyledTextField") {

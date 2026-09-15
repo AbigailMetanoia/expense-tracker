@@ -2,33 +2,47 @@
 //  ReceiptCaptureFlowView.swift
 //  costa
 //
+//  Full-screen receipt capture flow:
+//  1. Capture  — live camera
+//  2. Review   — captured photo with an adjustable crop frame
+//  3. Uploading
+//  4a. Low confidence — extraction found no line items; Cancel exits to
+//      Home, Retake goes back to the camera.
+//  4b. Edit    — EditReceiptDetailsView, when extraction looks good.
+//  (Failed — a genuine network/auth error, separate from "low confidence".)
+//
 
 import SwiftUI
 import UIKit
 import VisionKit
 
-/// Full-screen receipt capture → upload → edit flow.
 struct ReceiptCaptureFlowView: View {
     enum Phase {
         case capture
-        case preview(UIImage)
+        case review(UIImage)
         case uploading(UIImage)
         case edit(Expense, BillExtraction?, UIImage)
+        case lowConfidence(UIImage)
         case failed(String, UIImage)
     }
 
     @Environment(AuthController.self) private var auth
     @Environment(\.dismiss) private var dismiss
-    @State private var phase: Phase = .capture
+    @State private var phase: Phase
     @State private var captureKey = 0
+    @State private var cropRect: CGRect = .zero
+
+    init(initialPhase: Phase = .capture) {
+        _phase = State(initialValue: initialPhase)
+    }
 
     var body: some View {
         Group {
             switch phase {
             case .capture:
                 capturePane
-            case .preview(let image):
-                receiptPreview(for: image)
+            case .review(let image):
+                reviewPane(for: image)
             case .uploading(let image):
                 uploadingView(for: image)
             case .edit(let expense, let extraction, let image):
@@ -41,19 +55,21 @@ struct ReceiptCaptureFlowView: View {
                         captureKey += 1
                     }
                 )
+            case .lowConfidence(let image):
+                lowConfidenceView(image: image)
             case .failed(let message, let image):
                 failedView(message: message, image: image)
             }
         }
     }
 
-    // MARK: - Capture pane
+    // MARK: - 1. Capture pane
 
     @ViewBuilder
     private var capturePane: some View {
         if VNDocumentCameraViewController.isSupported {
             DocumentCameraRepresentable(
-                onCapture: { image in phase = .preview(image) },
+                onCapture: { image in phase = .review(image) },
                 onCancel: { dismiss() },
                 onFail: { _ in dismiss() }
             )
@@ -61,7 +77,7 @@ struct ReceiptCaptureFlowView: View {
             .id(captureKey)
         } else if UIImagePickerController.isSourceTypeAvailable(.camera) {
             CameraImagePickerRepresentable(
-                onCapture: { phase = .preview($0) },
+                onCapture: { phase = .review($0) },
                 onCancel: { dismiss() }
             )
             .ignoresSafeArea()
@@ -82,41 +98,88 @@ struct ReceiptCaptureFlowView: View {
         }
     }
 
-    // MARK: - Preview
+    // MARK: - 2. Review pane (adjustable crop frame)
 
-    private func receiptPreview(for image: UIImage) -> some View {
-        NavigationStack {
+    private func reviewPane(for image: UIImage) -> some View {
+        GeometryReader { geo in
+            let containerSize = geo.size
+
             ZStack {
                 Color.black.ignoresSafeArea()
+
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-            }
-            .navigationTitle("Receipt")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .bottomBar) {
+                    .frame(width: containerSize.width, height: containerSize.height)
+
+                ReceiptCropOverlay(rect: $cropRect, containerSize: containerSize)
+
+                VStack {
                     HStack {
-                        Button("Retake") {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 36, height: 36)
+                                .background(.black.opacity(0.4), in: Circle())
+                        }
+                        .padding(.leading, 16)
+                        .padding(.top, 8)
+
+                        Spacer()
+                    }
+
+                    Spacer()
+
+                    HStack {
+                        Button {
                             phase = .capture
                             captureKey += 1
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 48, height: 48)
+                                .background(.black.opacity(0.4), in: Circle())
                         }
+                        .accessibilityLabel("Retake")
+
                         Spacer()
-                        Button("Save") {
-                            Task { await uploadImage(image) }
+
+                        Button {
+                            let cropped = image.cropped(toDisplayRect: cropRect, inContainer: containerSize)
+                            Task { await uploadImage(cropped) }
+                        } label: {
+                            Image(systemName: "checkmark")
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 56, height: 56)
+                                .background(Color.blue, in: Circle())
                         }
-                        .fontWeight(.semibold)
+                        .accessibilityLabel("Confirm")
                     }
-                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 24)
                 }
             }
+            .onAppear {
+                // Start the crop frame inset ~8% from each edge — a
+                // reasonable default that the user can drag from there.
+                let inset = min(containerSize.width, containerSize.height) * 0.08
+                cropRect = CGRect(
+                    x: inset,
+                    y: inset,
+                    width: containerSize.width - inset * 2,
+                    height: containerSize.height - inset * 2
+                )
+            }
         }
+        .ignoresSafeArea()
     }
 
-    // MARK: - Uploading
+    // MARK: - 3. Uploading
 
     private func uploadingView(for image: UIImage) -> some View {
         ZStack {
@@ -137,7 +200,65 @@ struct ReceiptCaptureFlowView: View {
         }
     }
 
-    // MARK: - Failed
+    // MARK: - 4a. Low confidence warning
+
+    private func lowConfidenceView(image: UIImage) -> some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .overlay(.black.opacity(0.55))
+
+            VStack(spacing: 16) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.red)
+
+                Text("Try Again")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+
+                Text("Could not extract price line items from this image. Try a clearer photo.")
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white.opacity(0.7))
+
+                HStack(spacing: 12) {
+                    Button {
+                        dismiss() // back to Home
+                    } label: {
+                        Text("Cancel")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.white.opacity(0.12), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        phase = .capture // back to Camera
+                        captureKey += 1
+                    } label: {
+                        Text("Retake")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.blue, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 4)
+            }
+            .padding(24)
+            .background(Color(red: 0.11, green: 0.11, blue: 0.13), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .padding(.horizontal, 32)
+        }
+    }
+
+    // MARK: - Failed (genuine technical error, not a confidence issue)
 
     private func failedView(message: String, image: UIImage) -> some View {
         ZStack {
@@ -147,9 +268,9 @@ struct ReceiptCaptureFlowView: View {
                 .scaledToFit()
                 .overlay(.black.opacity(0.55))
             VStack(spacing: 20) {
-                Image(systemName: "exclamationmark.circle.fill")
+                Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 48))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.yellow)
                 Text(message)
                     .font(.callout)
                     .multilineTextAlignment(.center)
@@ -206,7 +327,17 @@ struct ReceiptCaptureFlowView: View {
         do {
             let client = CostAPIClient(accessToken: token)
             let response = try await client.fromBill(imageJPEG: jpeg)
-            phase = .edit(response.expense, response.extraction, image)
+
+            // NOTE: this treats "no line items extracted" as the low-
+            // confidence signal, since that's the one thing we know is
+            // reliably present on the response. If/when the backend adds
+            // a real confidence score to `BillExtraction`, swap this for
+            // e.g. `(response.extraction?.confidence ?? 0) < 0.7`.
+            if response.expense.costs.isEmpty {
+                phase = .lowConfidence(image)
+            } else {
+                phase = .edit(response.expense, response.extraction, image)
+            }
         } catch {
             phase = .failed(error.localizedDescription, image)
         }
@@ -295,7 +426,24 @@ private struct CameraImagePickerRepresentable: UIViewControllerRepresentable {
     }
 }
 
-#Preview {
+#Preview("Capture") {
     ReceiptCaptureFlowView()
         .environment(AuthController())
+}
+
+#Preview("Low confidence") {
+    ReceiptCaptureFlowView(initialPhase: .lowConfidence(previewReceiptPlaceholder()))
+        .environment(AuthController())
+}
+
+/// A plain dark placeholder image, just so preview-only phases (like the
+/// low-confidence warning) have something to show behind the alert
+/// without needing a real captured receipt.
+private func previewReceiptPlaceholder() -> UIImage {
+    let size = CGSize(width: 400, height: 800)
+    let renderer = UIGraphicsImageRenderer(size: size)
+    return renderer.image { _ in
+        UIColor(white: 0.2, alpha: 1).setFill()
+        UIRectFill(CGRect(origin: .zero, size: size))
+    }
 }
