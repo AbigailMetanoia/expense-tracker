@@ -23,211 +23,135 @@ struct EditCostDetailSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Content
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        StyledTextField(
-                            title: "Name",
-                            placeholder: "Item name",
-                            text: $viewModel.nameText
-                        )
+        VStack(spacing: 0) {
+            CostaDragHandle()
+                .padding(.top, 8)
+                .padding(.bottom, 20)
 
-                        StyledTextField(
-                            title: "Quantity",
-                            placeholder: "0",
-                            text: $viewModel.quantityText,
-                            keyboardType: .decimalPad
-                        )
-
-                        StyledTextField(
-                            title: "Unit Price",
-                            placeholder: "0",
-                            text: $viewModel.unitPriceText,
-                            leadingText: viewModel.cost.currency,
-                            keyboardType: .decimalPad
-                        )
-
-                        // Total display
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Total")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                            Text(viewModel.calculatedTotal, format: .currency(code: viewModel.cost.currency))
-                                .font(.body)
-                                .foregroundStyle(.primary)
-                        }
-
-                        // Category selector with add mode
-                        if viewModel.categories.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Category")
-                                    .font(.callout.weight(.semibold))
-                                    .foregroundStyle(.primary)
-                                Text("Add at least one category to classify this line item.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Button {
-                                    viewModel.isAddingCategory = true
-                                } label: {
-                                    Text("Add category")
-                                        .font(.body.weight(.semibold))
-                                        .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.borderedProminent)
-                            }
-                        } else {
-                            StyledSelectField(
-                                title: "Category",
-                                selection: $viewModel.selectedCategory,
-                                options: viewModel.categories,
-                                optionLabel: { $0.name },
-                                onAddNew: { viewModel.isAddingCategory = true }
-                            )
-                        }
-
-                        // Error message
-                        if let error = viewModel.errorMessage {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "exclamationmark.circle.fill")
-                                        .foregroundStyle(.red)
-                                    Text(error)
-                                        .font(.caption)
-                                        .foregroundStyle(.red)
-                                }
-                            }
-                            .padding(12)
-                            .background(Color.red.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                    }
-                    .padding(20)
-                }
-                .background(Color(.systemGroupedBackground))
-            }
-            .navigationTitle("Edit cost")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        Task {
-                            await saveAndDismiss()
-                        }
-                    }
-                    .buttonStyle(.glassProminent)
-                    .disabled(
-                        viewModel.isLoading
-                            || viewModel.nameText.trimmingCharacters(in: .whitespaces).isEmpty
-                            || viewModel.selectedCategory.id == nil
-                    )
-                }
-            }
-            .overlay {
-                if viewModel.isLoading {
-                    ZStack {
-                        Color.black.opacity(0.12)
-                            .ignoresSafeArea()
-                        ProgressView()
-                            .controlSize(.large)
-                    }
-                    .allowsHitTesting(true)
-                }
-            }
-            .sheet(isPresented: $viewModel.isAddingCategory) {
-                addCategorySheet
-            }
-            .task {
-                guard let token = await auth.validToken() else { return }
-                await viewModel.loadCategories(accessToken: token)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var addCategorySheet: some View {
-        NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     StyledTextField(
-                        title: "Category Name",
-                        placeholder: "Enter category name",
-                        text: $viewModel.newCategoryName
+                        title: "Name",
+                        placeholder: "e.g Groceries",
+                        text: $viewModel.nameText
                     )
 
                     StyledTextField(
-                        title: "Emoji",
-                        placeholder: "e.g. 🍔",
-                        text: $viewModel.newCategoryEmoji
+                        title: "Quantity",
+                        placeholder: "1",
+                        text: $viewModel.quantityText,
+                        keyboardType: .decimalPad
                     )
 
                     StyledTextField(
-                        title: "Color",
-                        placeholder: "#RRGGBB or RRGGBB",
-                        text: $viewModel.newCategoryColor
+                        title: "Unit Price",
+                        placeholder: "e.g 20000",
+                        text: $viewModel.unitPriceText,
+                        leadingText: viewModel.cost.currency,
+                        keyboardType: .decimalPad
                     )
 
-                    if let hex = normalizedColorForSwatch(viewModel.newCategoryColor),
-                       let chip = Color(hex: hex) {
-                        HStack(spacing: 10) {
-                            Text("Preview")
-                                .font(.callout)
+                    Text("Total: \(viewModel.calculatedTotal, format: .currency(code: viewModel.cost.currency))")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    // Category selector with add mode
+                    if viewModel.categories.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Category")
+                                .font(.callout.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text("Add at least one category to classify this line item.")
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
-                            Circle()
-                                .fill(chip)
-                                .frame(width: 28, height: 28)
-                                .overlay(Circle().strokeBorder(.separator, lineWidth: 1))
-                        }
-                    }
-                }
-                .padding(20)
-            }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("New Category")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        viewModel.resetNewCategoryForm()
-                        viewModel.isAddingCategory = false
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Create") {
-                        Task {
-                            guard let token = await auth.validToken() else {
-                                viewModel.errorMessage = "Authentication failed."
-                                return
+                            Button {
+                                viewModel.isAddingCategory = true
+                            } label: {
+                                Text("Add category")
+                                    .font(.body.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
                             }
-                            await viewModel.addCategory(accessToken: token)
+                            .buttonStyle(.borderedProminent)
                         }
+                    } else {
+                        StyledSelectField(
+                            title: "Category",
+                            selection: $viewModel.selectedCategory,
+                            options: viewModel.categories,
+                            optionLabel: { $0.name },
+                            onAddNew: { viewModel.isAddingCategory = true }
+                        )
                     }
-                    
-                    .disabled(viewModel.isLoading || viewModel.newCategoryName.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .foregroundStyle(
-                        viewModel.isLoading || viewModel.newCategoryName.trimmingCharacters(in: .whitespaces).isEmpty
-                            ? Color.secondary
-                            : Color.blue
-                    )
+
+                    // Error message
+                    if let error = viewModel.errorMessage {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .foregroundStyle(.red)
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                        .padding(12)
+                        .background(Color.red.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 4)
+            }
+
+            CostaActionButtons(
+                cancelTitle: "Cancel",
+                saveTitle: "Save",
+                isSaveDisabled: viewModel.isLoading
+                    || viewModel.nameText.trimmingCharacters(in: .whitespaces).isEmpty
+                    || viewModel.selectedCategory.id == nil,
+                cancelAction: { dismiss() },
+                saveAction: { Task { await saveAndDismiss() } }
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 20)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .overlay {
+            if viewModel.isLoading {
+                ZStack {
+                    Color.black.opacity(0.25)
+                        .ignoresSafeArea()
+                    ProgressView()
+                        .tint(.white)
+                        .controlSize(.large)
+                }
+                .allowsHitTesting(true)
             }
         }
-    }
-
-    /// Best-effort parse for preview chip (same rules as view model).
-    private func normalizedColorForSwatch(_ raw: String) -> String? {
-        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard !s.isEmpty else { return nil }
-        if s.hasPrefix("#") { s.removeFirst() }
-        guard s.count == 6 || s.count == 8 else { return nil }
-        guard s.allSatisfy(\.isHexDigit) else { return nil }
-        return "#\(s)"
+        .sheet(isPresented: $viewModel.isAddingCategory) {
+            CategoryFormSheet(
+                currency: viewModel.cost.currency,
+                isSaving: viewModel.isLoading,
+                onSave: { name, emoji, colorHex, _ in
+                    // NOTE: budget-per-category isn't wired up yet — see
+                    // CategoryFormSheet's doc comment. Only name/emoji/color
+                    // are persisted here.
+                    viewModel.newCategoryName = name
+                    viewModel.newCategoryEmoji = emoji
+                    viewModel.newCategoryColor = colorHex
+                    Task {
+                        guard let token = await auth.validToken() else {
+                            viewModel.errorMessage = "Authentication failed."
+                            return
+                        }
+                        await viewModel.addCategory(accessToken: token)
+                    }
+                }
+            )
+        }
+        .task {
+            guard let token = await auth.validToken() else { return }
+            await viewModel.loadCategories(accessToken: token)
+        }
     }
 
     private func saveAndDismiss() async {
@@ -305,7 +229,7 @@ private struct EditCostDetailSheetPreviewHost: View {
                 )
                 .environment(AuthController.previewAuthenticated())
                 .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .presentationDragIndicator(.hidden)
             }
     }
 }

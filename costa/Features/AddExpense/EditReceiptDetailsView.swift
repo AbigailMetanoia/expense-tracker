@@ -2,6 +2,12 @@
 //  EditReceiptDetailsView.swift
 //  costa
 //
+//  This screen is a READ-ONLY review of the scanned/entered receipt.
+//  Tapping a section opens a dedicated sheet to edit just that part —
+//  Transaction Details, an individual item, Notes, or a Tax/Service
+//  charge. Edits only touch local state; the top-right "Save" button is
+//  what actually persists everything to the server.
+//
 
 import SwiftUI
 import UIKit
@@ -56,6 +62,24 @@ struct EditReceiptDetailsView: View {
         case manual
     }
 
+    /// Which sub-sheet is currently presented. One enum + one `.sheet(item:)`
+    /// keeps section-editing sheets from fighting over presentation state.
+    private enum ActiveSheet: Identifiable {
+        case transaction
+        case notes
+        case cost(EditableCost)
+        case charge(ReceiptCharge)
+
+        var id: String {
+            switch self {
+            case .transaction: "transaction"
+            case .notes: "notes"
+            case .cost(let cost): "cost-\(cost.id)"
+            case .charge(let charge): "charge-\(charge.id)"
+            }
+        }
+    }
+
     @Environment(AuthController.self) private var auth
     @Environment(\.dismiss) private var dismiss
 
@@ -66,19 +90,28 @@ struct EditReceiptDetailsView: View {
     var source: Source = .scanBill
     var isReadOnly: Bool = false
 
-    @State private var expenseName: String
     @State private var expenseDate: Date
     @State private var paymentMethod: String
     @State private var location: String
     @State private var notes: String
     @State private var editCosts: [EditableCost]
+    @State private var charges: [ReceiptCharge]
 
     @State private var isSaving = false
     @State private var saveError: String?
     @State private var transactionExpanded = true
     @State private var itemsExpanded = true
-    @State private var selectedCost: EditableCost?
+    @State private var notesExpanded = true
     @State private var summaryExpanded = true
+    @State private var activeSheet: ActiveSheet?
+
+    /// Reused purely for its category list/loading/add-new-category
+    /// capability (same pattern as `EditCostDetailSheet`) — categories are
+    /// a workspace-wide list, not derived from what's already on the
+    /// receipt's items, so they still show up (with an "Add category"
+    /// option) even on a freshly scanned receipt where no item has a
+    /// category yet.
+    @State private var categoriesViewModel: EditCostDetailViewModel
 
     init(
         expense: Expense,
@@ -95,11 +128,6 @@ struct EditReceiptDetailsView: View {
         self.source = source
         self.isReadOnly = isReadOnly
 
-        let merchant = extraction?.merchant?.isEmpty == false
-            ? extraction!.merchant!
-            : expense.name
-        _expenseName = State(initialValue: merchant)
-
         let parser = DateFormatter()
         parser.locale = Locale(identifier: "en_US_POSIX")
         parser.dateFormat = "yyyy-MM-dd"
@@ -114,6 +142,30 @@ struct EditReceiptDetailsView: View {
         _location = State(initialValue: loc)
         _notes = State(initialValue: expense.notes ?? "")
         _editCosts = State(initialValue: expense.costs.map { EditableCost(cost: $0) })
+
+        // NOTE: tax/service charges aren't part of the `Expense`/`Cost`
+        // models yet, so they start with sensible defaults rather than
+        // being loaded from the server. Wire this up to real persisted
+        // fields once the backend supports it.
+        _charges = State(initialValue: [
+            ReceiptCharge(type: .tax, mode: .percentage, value: 10),
+            ReceiptCharge(type: .service, mode: .fixed, value: 0)
+        ])
+
+        // Any real Cost works here — it's only used as a vehicle to reach
+        // the shared category list, never saved itself.
+        let placeholderCost = expense.costs.first ?? Cost(
+            id: "placeholder",
+            user_id: nil,
+            name: "",
+            amount: 0,
+            currency: "IDR",
+            created_at: nil,
+            updated_at: nil,
+            category_id: nil,
+            category: nil
+        )
+        _categoriesViewModel = State(initialValue: EditCostDetailViewModel(cost: placeholderCost))
     }
 
     // MARK: - Body
@@ -130,37 +182,96 @@ struct EditReceiptDetailsView: View {
 
                 transactionCard
                 itemsCard
-                summaryCard
                 notesCard
+                summaryCard
             }
             .listStyle(.insetGrouped)
             .listSectionSpacing(12)
             .scrollContentBackground(.hidden)
             .background(Color(.systemGroupedBackground))
-            .sheet(item: $selectedCost) { cost in
-                let costModel = Cost(
-                    id: cost.id,
-                    user_id: nil,
-                    name: cost.name,
-                    amount: cost.amount,
-                    currency: cost.currency,
-                    created_at: nil,
-                    updated_at: nil,
-                    category_id: cost.category_id,
-                    category: cost.category
-                )
-                EditCostDetailSheet(cost: costModel, onSaved: { updated in
-                    if let i = editCosts.firstIndex(where: { $0.id == updated.id }) {
-                        editCosts[i] = EditableCost(cost: updated)
-                    } else {
-                        editCosts.append(EditableCost(cost: updated))
-                    }
-                })
+            .sheet(item: $activeSheet) { sheet in
+                switch sheet {
+                case .transaction:
+                    EditTransactionDetailsSheet(
+                        date: expenseDate,
+                        paymentMethod: paymentMethod,
+                        location: location,
+                        onSave: { newDate, newPaymentMethod, newLocation in
+                            expenseDate = newDate
+                            paymentMethod = newPaymentMethod
+                            location = newLocation
+                        }
+                    )
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
+
+                case .notes:
+                    EditNotesSheet(
+                        notes: notes,
+                        onSave: { notes = $0 }
+                    )
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
+
+                case .cost(let cost):
+                    let costModel = Cost(
+                        id: cost.id,
+                        user_id: nil,
+                        name: cost.name,
+                        amount: cost.amount,
+                        currency: cost.currency,
+                        created_at: nil,
+                        updated_at: nil,
+                        category_id: cost.category_id,
+                        category: cost.category
+                    )
+                    EditCostDetailSheet(cost: costModel, onSaved: { updated in
+                        if let i = editCosts.firstIndex(where: { $0.id == updated.id }) {
+                            editCosts[i] = EditableCost(cost: updated)
+                        } else {
+                            editCosts.append(EditableCost(cost: updated))
+                        }
+                    })
+
+                case .charge(let charge):
+                    EditSummaryChargeSheet(
+                        charge: charge,
+                        currency: editCosts.first?.currency ?? "IDR",
+                        onSave: { updated in
+                            if let i = charges.firstIndex(where: { $0.id == updated.id }) {
+                                charges[i] = updated
+                            }
+                        }
+                    )
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
+                }
             }
             .safeAreaInset(edge: .bottom) {
                 Color.clear.frame(height: 20)
             }
-            .navigationTitle("EDIT RECEIPT DETAILS")
+            .task {
+                guard let token = await auth.validToken() else { return }
+                await categoriesViewModel.loadCategories(accessToken: token)
+            }
+            .sheet(isPresented: $categoriesViewModel.isAddingCategory) {
+                CategoryFormSheet(
+                    currency: editCosts.first?.currency ?? "IDR",
+                    isSaving: categoriesViewModel.isLoading,
+                    onSave: { name, emoji, colorHex, _ in
+                        // NOTE: budget-per-category isn't wired up yet —
+                        // see CategoryFormSheet's doc comment.
+                        categoriesViewModel.newCategoryName = name
+                        categoriesViewModel.newCategoryEmoji = emoji
+                        categoriesViewModel.newCategoryColor = colorHex
+                        Task {
+                            guard let token = await auth.validToken() else { return }
+                            await categoriesViewModel.addCategory(accessToken: token)
+                        }
+                    }
+                )
+            }
+            .navigationTitle("Receipt Detail")
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
             .toolbar {
@@ -207,54 +318,76 @@ struct EditReceiptDetailsView: View {
         }
     }
 
-
     // MARK: - Header card
 
     private var headerCard: some View {
         HStack(alignment: .top, spacing: 12) {
             thumbnailOverlay
+
             VStack(alignment: .leading, spacing: 8) {
                 if extraction != nil && source == .scanBill {
-                    HStack(spacing: 4) {
-                      
-                        Text("Auto-detected")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.darkGreen)
-                        Image(systemName: "checkmark")
-                            .font(.caption2.weight(.bold))
-                    }
-                    .foregroundStyle(.darkGreen)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(.darkGreen.opacity(0.12))
-                    .overlay(
-                        Capsule()
-                            .stroke(.darkGreen, lineWidth: 1)
-                    )
-                    .clipShape(.capsule)
+                    StyledStatusBadge(text: "Auto-detected", tint: .darkGreen)
                 }
                 if source == .scanBill {
                     HStack(spacing: 4) {
                         Text("Confidence")
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundStyle(.secondary)
                         Image(systemName: "info.circle")
                             .font(.caption2)
-                            .foregroundColor(.gray)
+                            .foregroundStyle(.secondary)
                         Text("92%")
-                            .font(.caption)
-                            .foregroundColor(.darkGreen)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.darkGreen)
                     }
                 }
-                TextField("Merchant name", text: $expenseName)
-                    .font(.headline)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(Color(.systemGroupedBackground), in: RoundedRectangle(cornerRadius: 8))
+
+                // Category stays an inline dropdown (not a sub-sheet) since
+                // it's a quick single choice, not a multi-field edit.
+                // Always shown — even with zero categories yet — so the
+                // user has a way to create the first one.
+                if categoriesViewModel.categories.isEmpty {
+                    Button {
+                        categoriesViewModel.isAddingCategory = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Add category")
+                        }
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 20)
+                        .frame(height: 48)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.black, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    StyledSelectField(
+                        titleIcon: "square.grid.2x2.fill",
+                        selection: overallCategoryBinding,
+                        options: categoriesViewModel.categories,
+                        optionLabel: { $0.name },
+                        onAddNew: { categoriesViewModel.isAddingCategory = true },
+                        style: .solidDark
+                    )
+                }
             }
         }
         .padding(16)
         .receiptCard()
+    }
+
+    private var overallCategoryBinding: Binding<CostCategory> {
+        Binding(
+            get: { editCosts.first?.category ?? categoriesViewModel.categories[0] },
+            set: { newValue in
+                for i in editCosts.indices {
+                    editCosts[i].category = newValue
+                    editCosts[i].category_id = newValue.id
+                }
+            }
+        )
     }
 
     private var thumbnailOverlay: some View {
@@ -279,56 +412,40 @@ struct EditReceiptDetailsView: View {
         }
     }
 
-    // MARK: - Transaction details card
+    // MARK: - Transaction details card (read-only, taps open the edit sheet)
 
     private var transactionCard: some View {
         Section {
             if transactionExpanded {
-                HStack {
-                    Text("Date")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    DatePicker("", selection: $expenseDate, displayedComponents: .date)
-                        .labelsHidden()
-                        .datePickerStyle(.compact)
-                }
-                .rowPadding()
-                .listRowInsets(EdgeInsets())
-
-                HStack {
-                    Text("Payment Method")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Picker("Payment Method", selection: $paymentMethod) {
-                        ForEach(PaymentMethodOption.allCases) { option in
-                            Text(option.displayName).tag(option.rawValue)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .tint(.primary)
-                }
-                .rowPadding()
-                .listRowInsets(EdgeInsets())
-
-                HStack {
-                    Text("Location")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    TextField("Location", text: $location)
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: 200)
-                }
-                .rowPadding()
-                .listRowInsets(EdgeInsets())
+                readOnlyRow(label: "Date", value: expenseDate.formatted(date: .abbreviated, time: .omitted))
+                readOnlyRow(label: "Payment Method", value: PaymentMethodOption(rawValue: paymentMethod)?.displayName ?? paymentMethod)
+                readOnlyRow(label: "Location", value: location.isEmpty ? "—" : location)
             }
         } header: {
             sectionHeader(icon: "calendar", title: "Transaction Details", isExpanded: $transactionExpanded)
                 .textCase(nil)
                 .listRowInsets(EdgeInsets())
         }
+    }
+
+    private func readOnlyRow(label: String, value: String) -> some View {
+        Button {
+            if !isReadOnly { activeSheet = .transaction }
+        } label: {
+            HStack {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(value)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+            }
+            .rowPadding()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets())
     }
 
     // MARK: - Items card
@@ -345,7 +462,7 @@ struct EditReceiptDetailsView: View {
 
                         if !isReadOnly {
                             Button {
-                                selectedCost = makeNewCostDraft()
+                                activeSheet = .cost(makeNewCostDraft())
                             } label: {
                                 Label("Add item", systemImage: "plus")
                                     .font(.subheadline.weight(.semibold))
@@ -358,14 +475,13 @@ struct EditReceiptDetailsView: View {
                     .listRowInsets(EdgeInsets())
                 } else {
                     ForEach(editCosts) { cost in
-                        Button(action: { selectedCost = cost }) {
+                        Button(action: { activeSheet = .cost(cost) }) {
                             HStack(spacing: 10) {
-                                Text("1×")
+                                Text("1x")
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 3)
-                                    .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 5))
+                                    .frame(width: 28, height: 28)
+                                    .background(.secondary.opacity(0.15), in: Circle())
 
                                 Text(cost.name)
                                     .font(.subheadline)
@@ -401,39 +517,85 @@ struct EditReceiptDetailsView: View {
         }
     }
 
+    // MARK: - Notes card
+
+    private var notesCard: some View {
+        Section {
+            if notesExpanded {
+                Button {
+                    if !isReadOnly { activeSheet = .notes }
+                } label: {
+                    Text(notes.isEmpty ? "Add a note…" : notes)
+                        .font(.subheadline)
+                        .foregroundStyle(notes.isEmpty ? .secondary : .primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .rowPadding()
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .listRowInsets(EdgeInsets())
+            }
+        } header: {
+            sectionHeader(icon: "doc.text.fill", title: "Notes", isExpanded: $notesExpanded)
+                .textCase(nil)
+                .listRowInsets(EdgeInsets())
+        }
+    }
+
     // MARK: - Summary card
+
+    private var subtotal: Double {
+        editCosts.reduce(0) { $0 + $1.amount }
+    }
+
+    private var grandTotal: Double {
+        subtotal + charges.reduce(0) { $0 + $1.amount(subtotal: subtotal) }
+    }
 
     private var summaryCard: some View {
         let currency = editCosts.first?.currency ?? "IDR"
-        let total = editCosts.reduce(0) { $0 + $1.amount }
 
         return Section {
             if summaryExpanded {
-                HStack {
-                    Text("Subtotal")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(formatAmount(total, currency: currency))
-                        .font(.subheadline)
-                }
+                StyledSummaryRow(
+                    label: "Subtotal",
+                    value: formatAmount(subtotal, currency: currency)
+                )
                 .rowPadding()
                 .listRowInsets(EdgeInsets())
 
-                HStack {
-                    Text("Total")
-                        .font(.headline)
-                    Spacer()
-                    Text(formatAmount(total, currency: currency))
-                        .font(.headline)
-                        .foregroundStyle(.green)
+                ForEach(charges) { charge in
+                    Button {
+                        if !isReadOnly { activeSheet = .charge(charge) }
+                    } label: {
+                        StyledSummaryRow(
+                            label: chargeLabel(charge),
+                            value: formatAmount(charge.amount(subtotal: subtotal), currency: currency),
+                            infoText: charge.type == .tax && charge.mode == .percentage
+                                ? "Calculated automatically from the subtotal."
+                                : nil
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .rowPadding()
+                    .listRowInsets(EdgeInsets())
                 }
+
+                Divider()
+                    .padding(.horizontal, 16)
+
+                StyledSummaryRow(
+                    label: "Total",
+                    value: "Rp " + formatAmount(grandTotal, currency: currency),
+                    emphasized: true
+                )
                 .rowPadding()
                 .listRowInsets(EdgeInsets())
             }
         } header: {
             sectionHeader(
-                icon: "clock.fill",
+                icon: "chart.pie.fill",
                 title: "Summary",
                 subtitle: "Auto Calculated",
                 isExpanded: $summaryExpanded
@@ -443,28 +605,14 @@ struct EditReceiptDetailsView: View {
         }
     }
 
-    // MARK: - Notes card
-
-    private var notesCard: some View {
-        Section {
-            HStack(spacing: 12) {
-                Image(systemName: "doc.text.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 32, height: 32)
-                    .background(.green, in: RoundedRectangle(cornerRadius: 8))
-                Text("Notes")
-                    .font(.headline)
-            }
-            .rowPadding()
-            .listRowInsets(EdgeInsets())
-
-            TextField("Add a note…", text: $notes, axis: .vertical)
-                .font(.subheadline)
-                .lineLimit(3...)
-                .rowPadding()
-                .listRowInsets(EdgeInsets())
+    private func chargeLabel(_ charge: ReceiptCharge) -> String {
+        if charge.type == .tax, charge.mode == .percentage {
+            let percent = charge.value.truncatingRemainder(dividingBy: 1) == 0
+                ? String(Int(charge.value))
+                : String(charge.value)
+            return "Tax (\(percent)%)"
         }
+        return charge.type.rawValue
     }
 
     // MARK: - Section header builder
@@ -482,7 +630,7 @@ struct EditReceiptDetailsView: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.darkGreen)
+                    .foregroundStyle(.blue)
 
                 if let subtitle {
                     HStack(spacing: 4) {
@@ -524,7 +672,7 @@ struct EditReceiptDetailsView: View {
 
         let dateStr = isoDateString(from: expenseDate)
         let patch = ExpensePatch(
-            name: expenseName,
+            name: originalExpense.name,
             date: dateStr,
             location: location,
             notes: notes.isEmpty ? nil : notes,
@@ -541,7 +689,8 @@ struct EditReceiptDetailsView: View {
                 guard let original = originalExpense.costs.first(where: { $0.id == editCost.id }) else { continue }
                 let nameChanged = editCost.name != original.name
                 let amountChanged = abs(editCost.amount - original.amount) > 0.001
-                guard nameChanged || amountChanged else { continue }
+                let categoryChanged = editCost.category_id != original.category_id
+                guard nameChanged || amountChanged || categoryChanged else { continue }
                 _ = try await client.patchCost(
                     id: editCost.id,
                     patch: CostPatch(
@@ -552,6 +701,10 @@ struct EditReceiptDetailsView: View {
                     )
                 )
             }
+
+            // NOTE: `charges` (tax/service) aren't persisted yet — see the
+            // comment on `_charges` in `init`. Add the corresponding API
+            // call here once the backend model supports it.
 
             dismiss()
         } catch {
@@ -579,10 +732,6 @@ struct EditReceiptDetailsView: View {
     private func deleteCost(_ cost: EditableCost) {
         withAnimation {
             editCosts.removeAll { $0.id == cost.id }
-        }
-
-        if selectedCost?.id == cost.id {
-            selectedCost = nil
         }
     }
 

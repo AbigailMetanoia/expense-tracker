@@ -20,52 +20,113 @@ struct LoginView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Email", text: $email)
-                        .textContentType(.username)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    SecureField("Password", text: $password)
-                        .textContentType(.password)
-                }
+        ZStack {
+            VStack {
+                CostaImageBackground(imageName: "Gradient2", alignment: .bottom).padding(.top, 10)
+            }
 
-                Section {
-                    Button {
-                        Task { await signInWithPassword() }
-                    } label: {
-                        if isBusy {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            Text("Sign In")
-                                .frame(maxWidth: .infinity)
+            ScrollView {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 60)
+
+                    Image("white_logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 62, height: 52)
+                        .padding(.bottom, 20)
+
+                    Text("Welcome back!")
+                        .font(.title.weight(.bold))
+                        .foregroundStyle(.white)
+
+                    Text("Please enter required details.")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.6))
+                        .padding(.top, 4)
+                        .padding(.bottom, 32)
+
+                    VStack(alignment: .leading, spacing: 20) {
+                        StyledTextField(
+                            title: "Email",
+                            placeholder: "example@gmail.com",
+                            text: $email,
+                            keyboardType: .emailAddress,
+                            textContentType: .username,
+                            autocapitalization: .never,
+                            autocorrectionDisabled: true
+                        )
+
+                        StyledTextField(
+                            title: "Password",
+                            placeholder: "Password",
+                            text: $password,
+                            isSecure: true,
+                            textContentType: .password
+                        )
+
+                        StyledGradientButton(
+                            title: "Sign in",
+                            isLoading: isBusy,
+                            isDisabled: email.isEmpty || password.isEmpty
+                        ) {
+                            Task { await signInWithPassword() }
+                        }
+                        .padding(.top, 4)
+
+                        HStack(spacing: 12) {
+                            Rectangle().fill(Color.white.opacity(0.15)).frame(height: 1)
+                            Text("Or")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.5))
+                            Rectangle().fill(Color.white.opacity(0.15)).frame(height: 1)
+                        }
+
+                        Button {
+                            errorMessage = nil
+                            startGoogleSignIn()
+                        } label: {
+                            HStack(spacing: 8) {
+                                // TODO: add a "google_logo" image asset (the
+                                // multicolor "G" mark) for an exact match.
+                                // Falls back to a plain globe glyph so this
+                                // still compiles without that asset.
+                                Image(systemName: "globe")
+                                    .foregroundStyle(.blue)
+                                Text("Sign in with Google")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(.black)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.white, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isBusy)
+
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.footnote)
+                                .foregroundStyle(.red)
                         }
                     }
-                    .disabled(isBusy || email.isEmpty || password.isEmpty)
-
-                    Button {
-                        errorMessage = nil
-                        startGoogleSignIn()
-                    } label: {
-                        Label("Continue with Google", systemImage: "globe")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .disabled(isBusy)
+                    .padding(20)
+                    .background(
+                        ZStack {
+                            Rectangle().fill(.ultraThinMaterial)
+                            Rectangle().fill(Color.black.opacity(0.55))
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                    )
                 }
-
-                if let errorMessage {
-                    Section {
-                        Text(errorMessage)
-                            .foregroundStyle(.red)
-                            .font(.footnote)
-                    }
-                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 40)
             }
-            .navigationTitle("Sign In")
         }
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     private func startGoogleSignIn() {
@@ -101,6 +162,8 @@ struct LoginView: View {
 }
 
 #Preview {
-    LoginView()
-        .environment(AuthController())
+    NavigationStack {
+        LoginView()
+    }
+    .environment(AuthController())
 }
