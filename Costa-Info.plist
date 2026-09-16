@@ -2,8 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSCameraUsageDescription</key>
-	<string>Costa uses the camera to scan receipts and capture expense details.</string>
 	<key>BackendAPIBaseURL</key>
 	<string>$(BACKEND_API_BASE_URL)</string>
 	<key>CFBundleURLTypes</key>

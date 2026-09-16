@@ -101,10 +101,15 @@ private struct TabBar: View {
     @Binding var showAddSheet: Bool
     var namespace: Namespace.ID
 
+    /// Solid dark track/FAB fill — replaces the previous ultraThinMaterial
+    /// glass stack. The HiFi wants a flat dark capsule, not a frosted one.
+    private let barFill = Color(red: 0.07, green: 0.09, blue: 0.13)
+    private let barStroke = Color.white.opacity(0.08)
+
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 12) {
             // Sliding pill group
-            HStack(spacing: 0) {
+            HStack(spacing: 4) {
                 ForEach(MainTabView.Tab.allCases, id: \.self) { tab in
                     TabPill(tab: tab, selected: selected, namespace: namespace) {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.72)) {
@@ -114,81 +119,22 @@ private struct TabBar: View {
                 }
             }
             .padding(6)
-            .background {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.35),
-                                        Color.white.opacity(0.10)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                    }
-                    .overlay {
-                        Capsule()
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.6),
-                                        Color.white.opacity(0.15)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    }
-            }
-            .shadow(color: .black.opacity(0.18), radius: 20, x: 0, y: 6)
+            .background(barFill, in: Capsule())
+            .overlay(Capsule().strokeBorder(barStroke, lineWidth: 1))
 
-            // FAB — same glass stack as tab pill
+            // FAB
             Button {
                 showAddSheet = true
             } label: {
                 Image(systemName: "plus")
-                    .font(.title2.bold())
-                    .foregroundStyle(.primary)
-                    .frame(width: 60, height: 60)
-                    .background {
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.35),
-                                                Color.white.opacity(0.10)
-                                            ],
-                                            startPoint: .top,
-                                            endPoint: .bottom
-                                        )
-                                    )
-                            }
-                            .overlay {
-                                Circle()
-                                    .strokeBorder(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.6),
-                                                Color.white.opacity(0.15)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            }
-                    }
-                    .shadow(color: .black.opacity(0.18), radius: 20, x: 0, y: 6)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 56, height: 56)
+                    .background(barFill, in: Circle())
+                    .overlay(Circle().strokeBorder(barStroke, lineWidth: 1))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Add")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -208,26 +154,25 @@ private struct TabPill: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 3) {
+            HStack(spacing: 8) {
                 Image(systemName: tab.icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .scaleEffect(isSelected ? 1.05 : 1.0)
-                Text(tab.label)
-                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 16, weight: .semibold))
+                if isSelected {
+                    Text(tab.label)
+                        .font(.system(size: 14, weight: .semibold))
+                }
             }
-            .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .padding(.horizontal, 6)
+            .foregroundStyle(.white)
+            .padding(.vertical, 12)
+            .padding(.horizontal, isSelected ? 16 : 14)
             .background {
-                // The capsule is ALWAYS in the view tree for all tabs;
+                // The pill is ALWAYS in the view tree for all tabs;
                 // opacity drives which one is visible so matchedGeometryEffect
-                // can smoothly interpolate position between any two tabs.
+                // can smoothly interpolate position/size between any two tabs.
                 Capsule()
-                    .fill(Color(.systemBackground))
+                    .fill(Color.white.opacity(0.15))
                     .matchedGeometryEffect(id: "pill", in: namespace, isSource: isSelected)
                     .opacity(isSelected ? 1 : 0)
-                    .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
             }
         }
         .buttonStyle(.plain)
