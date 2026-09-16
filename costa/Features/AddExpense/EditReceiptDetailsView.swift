@@ -324,22 +324,9 @@ struct EditReceiptDetailsView: View {
         HStack(alignment: .top, spacing: 12) {
             thumbnailOverlay
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .center, spacing: 10) {
                 if extraction != nil && source == .scanBill {
                     StyledStatusBadge(text: "Auto-detected", tint: .darkGreen)
-                }
-                if source == .scanBill {
-                    HStack(spacing: 4) {
-                        Text("Confidence")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Image(systemName: "info.circle")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text("92%")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.darkGreen)
-                    }
                 }
 
                 // Category stays an inline dropdown (not a sub-sheet) since
@@ -350,16 +337,20 @@ struct EditReceiptDetailsView: View {
                     Button {
                         categoriesViewModel.isAddingCategory = true
                     } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "plus.circle.fill")
+                        HStack(spacing: 12) {
+                            Image(systemName: "square.grid.2x2.fill")
+                                .font(.subheadline)
+                                .foregroundStyle(.blue)
                             Text("Add category")
+                                .foregroundStyle(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Image(systemName: "chevron.down")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.secondary)
                         }
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.white)
                         .padding(.horizontal, 20)
                         .frame(height: 48)
-                        .frame(maxWidth: .infinity)
-                        .background(Color.black, in: Capsule())
+                        .background(Color(uiColor: .secondarySystemFill), in: Capsule())
                     }
                     .buttonStyle(.plain)
                 } else {
@@ -368,8 +359,7 @@ struct EditReceiptDetailsView: View {
                         selection: overallCategoryBinding,
                         options: categoriesViewModel.categories,
                         optionLabel: { $0.name },
-                        onAddNew: { categoriesViewModel.isAddingCategory = true },
-                        style: .solidDark
+                        onAddNew: { categoriesViewModel.isAddingCategory = true }
                     )
                 }
             }

@@ -158,17 +158,15 @@ struct HomeView: View {
     private var headerSection: some View {
         HStack(spacing: 12) {
             Circle()
-                .fill(Color.green.opacity(0.2))
-                .frame(width: 44, height: 44)
+                .fill(CostaColors.containerBackground.opacity(0.2))
+                .frame(width: 56, height: 56)
                 .overlay {
-                    Text(String(firstName.prefix(1)).uppercased())
-                        .font(.headline.bold())
-                        .foregroundStyle(.green)
+                    Image(systemName: "person.fill")
                 }
 
             Text("Hello, \(firstName) \u{1F44B}")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
+                .font(.system(size: 21, weight: .bold))
+                .foregroundStyle(.primary)
 
             Spacer()
 
@@ -176,13 +174,13 @@ struct HomeView: View {
                 showSignOutConfirmation = true
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.body.weight(.semibold))
+                    .font(.system(size: 21, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
-                    .background(Color.white.opacity(0.1), in: Circle())
+                    .frame(width: 56, height: 56)
+                    .background(CostaColors.containerBackground.opacity(0.2), in: Circle())
             }
             .buttonStyle(.plain)
-        }
+        }.padding(.bottom, 10)
     }
 
     // MARK: - Filter chip
@@ -203,14 +201,14 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Text("Total Spending")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.primary.opacity(0.8))
                 Button {
                     isAmountHidden.toggle()
                 } label: {
                     Image(systemName: isAmountHidden ? "eye.slash" : "eye")
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(.primary.opacity(0.8))
                 }
                 .buttonStyle(.plain)
             }
@@ -218,17 +216,17 @@ struct HomeView: View {
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 if isAmountHidden {
                     Text("Rp. ••••••••")
-                        .font(.system(size: 30, weight: .bold))
+                        .font(.system(size: 34, weight: .bold))
                         .foregroundStyle(.white)
                 } else {
                     Text("Rp.")
-                        .font(.title2.weight(.bold))
+                        .font(.system(size: 34, weight: .bold))
                         .foregroundStyle(.white)
                     Text(wholeAmountText(displayedTotalAmount))
-                        .font(.system(size: 30, weight: .bold))
+                        .font(.system(size: 34, weight: .bold))
                         .foregroundStyle(.white)
                     Text(",00")
-                        .font(.title3.weight(.semibold))
+                        .font(.system(size: 34, weight: .bold))
                         .foregroundStyle(.white.opacity(0.4))
                 }
             }
@@ -241,13 +239,17 @@ struct HomeView: View {
                 HStack(spacing: 6) {
                     Image(systemName: trend.isIncrease ? "arrow.up" : "arrow.down")
                         .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 20, height: 20)
+                        .background(trend.isIncrease ? CostaColors.red : CostaColors.green, in: Circle())
+                    
                     Text(trend.text)
                         .font(.caption.weight(.medium))
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(trend.isIncrease ? Color.red.opacity(0.3) : Color.green.opacity(0.3), in: Capsule())
+                .background(trend.isIncrease ? CostaColors.red.opacity(0.3) : CostaColors.green.opacity(0.3), in: Capsule())
             }
 
             if let err = viewModel.errorMessage {
@@ -258,7 +260,7 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background(CostaColors.containerBackground.opacity(0.1), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     /// Placeholder trend text — see the NOTE above `summaryCard`.
@@ -275,13 +277,13 @@ struct HomeView: View {
                 title: "Income",
                 amount: incomeTotalPlaceholder,
                 icon: "arrow.up",
-                tint: .green
+                tint: CostaColors.green
             )
             statCard(
                 title: "Expenses",
                 amount: displayedTotalAmount,
                 icon: "arrow.down",
-                tint: .red
+                tint: CostaColors.red
             )
         }
     }
@@ -297,21 +299,21 @@ struct HomeView: View {
                 Image(systemName: icon)
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.white)
-                    .frame(width: 18, height: 18)
+                    .frame(width: 20, height: 20)
                     .background(tint, in: Circle())
                 Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(.primary)
             }
             Text("Rp. " + wholeAmountText(amount))
-                .font(.subheadline.weight(.bold))
+                .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(20)
+        .background(CostaColors.containerBackground.opacity(0.1), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     // MARK: - Recent expenses
@@ -320,13 +322,13 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Recent Expenses")
-                    .font(.headline)
-                    .foregroundStyle(.white)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.primary)
                 Spacer()
                 Button {
                     showRecentExpenses = true
                 } label: {
-                    HStack(spacing: 2) {
+                    HStack(spacing: 5) {
                         Text("See All")
                             .font(.subheadline)
                         Image(systemName: "chevron.right")

@@ -49,6 +49,16 @@ struct MainTabView: View {
     @State private var homeCostsRefreshToken = 0
     @Namespace private var pillNS
 
+    /// What to present once `AddExpenseOptionsSheet` has FULLY dismissed.
+    /// Setting `showReceiptCapture`/`showManualEntry` directly from inside
+    /// the sheet's button action races with the sheet's own dismiss
+    /// animation (both are triggered in the same tick), which is what
+    /// caused the ghosted/overlapping-sheet visual glitch. Routing through
+    /// `.sheet(onDismiss:)` guarantees the old sheet is completely gone
+    /// before the next presentation starts.
+    private enum PendingAction { case receiptCapture, manualEntry }
+    @State private var pendingAction: PendingAction?
+
     var body: some View {
         // Stable ZStack keeps all views in the tree so the safeAreaInset
         // never re-layouts and the tab bar never flickers on switch.
@@ -71,11 +81,18 @@ struct MainTabView: View {
                 namespace: pillNS
             )
         }
-        .sheet(isPresented: $showAddExpenseOptions) {
+        .sheet(isPresented: $showAddExpenseOptions, onDismiss: {
+            switch pendingAction {
+            case .receiptCapture: showReceiptCapture = true
+            case .manualEntry: showManualEntry = true
+            case nil: break
+            }
+            pendingAction = nil
+        }) {
             AddExpenseOptionsSheet(
                 isPresented: $showAddExpenseOptions,
-                onSnapReceipt: { showReceiptCapture = true },
-                onEnterManually: { showManualEntry = true }
+                onSnapReceipt: { pendingAction = .receiptCapture },
+                onEnterManually: { pendingAction = .manualEntry }
             )
             .presentationDetents([.height(440), .large])
             .presentationDragIndicator(.visible)

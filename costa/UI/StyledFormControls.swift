@@ -575,12 +575,12 @@ struct CostaAuroraBackground: View {
 
     var body: some View {
         ZStack {
-            Color.black
+            CostaColors.appBackground
             RadialGradient(
-                colors: [glowColor.opacity(0.55), glowColor.opacity(0.22), Color.clear],
+                colors: [glowColor.opacity(0.20), glowColor.opacity(0.20), Color.clear],
                 center: glowCenter,
                 startRadius: 10,
-                endRadius: 420
+                endRadius: 220
             )
             .blur(radius: 60)
         }
@@ -612,17 +612,7 @@ struct StyledGradientButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.20, green: 0.40, blue: 0.95),
-                        Color(red: 0.55, green: 0.60, blue: 0.98)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ),
-                in: Capsule()
-            )
+            .background(CostaColors.gradient, in: Capsule())
         }
         .buttonStyle(.plain)
         .disabled(isDisabled || isLoading)
@@ -741,34 +731,81 @@ struct StyledTransactionRow: View {
     let title: String
     let subtitle: String
     let amountText: String
+    /// Optional — when provided, shows the formatted transaction date and
+    /// time under `subtitle`. Defaults to `nil` so existing call sites
+    /// that already bake time into `subtitle` keep working unchanged.
+    var date: Date? = nil
 
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill((Color(hex: colorHex ?? "") ?? .blue).opacity(0.3))
-                    .frame(width: 44, height: 44)
+//                    .fill((Color(hex: colorHex ?? "") ?? .blue).opacity(0.3))
+                    .fill(CostaColors.circleContainer)
+                    .frame(width: 50, height: 50)
                 Text(emoji)
                     .font(.title3)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.primary)
                 Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.6))
+                if let date {
+                    Text(date.formatted(date: .abbreviated, time: .shortened))
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
             }
 
             Spacer()
 
             Text(amountText)
-                .font(.body.weight(.bold))
-                .foregroundStyle(.white)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(.primary)
         }
         .padding(14)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(CostaColors.containerBackground.opacity(0.1), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+// MARK: - StyledCategoryAmountRow
+//
+// A category-total row (icon + name + amount, no subtitle) — used
+// anywhere a flat list of "category → how much it cost" shows up:
+// SpendingView's Top Spending list, TopSpendingView's full list, etc.
+// Doesn't wrap itself in a Button — callers that need taps (e.g. to open
+// PocketDetailsView for that category) wrap this in their own Button.
+struct StyledCategoryAmountRow: View {
+    let emoji: String
+    let title: String
+    let amountText: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(CostaColors.circleContainer)
+                    .frame(width: 44, height: 44)
+                Text(emoji)
+                    .font(.title3)
+            }
+
+            Text(title)
+                .font(.body.weight(.medium))
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            Text(amountText)
+                .font(.body.weight(.bold))
+                .foregroundStyle(.primary)
+        }
+        .padding(16)
+        .background(CostaColors.containerBackground.opacity(0.1), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -798,12 +835,168 @@ struct StyledPillMenuPicker<Option: Hashable>: View {
                     .font(.caption.weight(.semibold))
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 10)
             .padding(.vertical, 10)
             .background(Color.white.opacity(0.1), in: Capsule())
         }
         .buttonStyle(.plain)
     }
+}
+
+// MARK: - CostaColors
+//
+// Centralized brand color tokens. Reference these (`CostaColors.xxx`)
+// instead of scattering hex literals or ad-hoc `Color.white.opacity(...)`
+// across individual screens, so the palette can be tuned from one place.
+enum CostaColors {
+    /// App-wide background — the base fill behind every screen.
+    static let appBackground = Color(hex: "#00071F")!
+    /// Tint used for card/container surfaces. Applied at partial opacity
+    /// (see `containerFill`) rather than full-strength, since it's a light
+    /// blue meant to tint a dark card, not paint it solid.
+    static let containerBackground = Color(hex: "#A5C2FF")!
+    /// Ready-to-use card fill: `containerBackground` at the opacity that
+    /// reads as a subtle tinted surface on `appBackground`.
+    static let containerFill = containerBackground.opacity(0.12)
+    static let red = Color(hex: "#FF0004")!
+    static let green = Color(hex: "#155728")!
+    /// Fill used behind the emoji icon in `StyledTransactionRow`.
+    static let circleContainer = Color(hex: "#0C111C")!
+    static let gradientStart = Color(hex: "#0055FF")!
+    static let gradientEnd = Color(hex: "#7E91FF")!
+    static let gradient = LinearGradient(
+        colors: [gradientStart, gradientEnd],
+        startPoint: .leading,
+        endPoint: .trailing
+    )
+
+    /// Main brand blue, used as the base for monochrome chart palettes
+    /// (e.g. the Spending donut) so slices stay "on-brand" instead of a
+    /// generic rainbow, while still reading as distinct shades.
+    static let mainBlue = Color(hex: "#0B5AFE")!
+    /// Shades of `mainBlue`, darkest first — pair with sorted-by-amount
+    /// data so the biggest slice gets the most saturated color.
+    static let blueShades: [Color] = [
+        Color(hex: "#0B5AFE")!,
+        Color(hex: "#3D7DFF")!,
+        Color(hex: "#6F9FFF")!,
+        Color(hex: "#9DBBFF")!,
+        Color(hex: "#C6D8FF")!,
+        Color(hex: "#083FB8")!
+    ]
+}
+
+#Preview("CostaAuroraBackground") {
+    CostaAuroraBackground(glowCenter: UnitPoint(x: 0.5, y: 0.05), glowColor: .blue)
+}
+
+#Preview("Gallery — Form Components") {
+    enum Category: String, CaseIterable { case food = "Food", transport = "Transport", utilities = "Utilities" }
+    enum AmountMode: String, CaseIterable, Hashable { case percentage = "Percentage", fixed = "Fix Amount" }
+
+    struct Demo: View {
+        @State private var name = "Venti Mocha Latte"
+        @State private var password = ""
+        @State private var unitPrice = "50.000"
+        @State private var category: Category = .food
+        @State private var date = Date()
+        @State private var notes = ""
+        @State private var mode: AmountMode = .percentage
+
+        var body: some View {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    CostaDragHandle().frame(maxWidth: .infinity)
+
+                    StyledTextField(title: "Name", placeholder: "Enter item name", text: $name)
+                    StyledTextField(title: "Password", placeholder: "Password", text: $password, isSecure: true)
+                    StyledTextField(title: "Unit Price", placeholder: "0", text: $unitPrice, leadingText: "IDR", trailingText: "IDR")
+
+                    StyledSelectField(
+                        title: "Category",
+                        selection: $category,
+                        options: Category.allCases,
+                        optionLabel: { $0.rawValue },
+                        onAddNew: {}
+                    )
+
+                    StyledDateField(title: "Date", date: $date)
+
+                    StyledSegmentedToggle(selection: $mode, options: AmountMode.allCases) { $0.rawValue }
+
+                    StyledTextArea(title: "Notes", placeholder: "Add Notes here....", text: $notes)
+
+                    VStack(spacing: 10) {
+                        StyledSummaryRow(label: "Subtotal", value: "Rp 150.000")
+                        StyledSummaryRow(label: "Tax (10%)", value: "Rp 15.000", infoText: "Calculated from subtotal.")
+                        Divider()
+                        StyledSummaryRow(label: "Total", value: "Rp 165.000", emphasized: true)
+                    }
+
+                    StyledStatusBadge(text: "Auto-detected", tint: .green)
+
+                    CostaActionButtons(cancelTitle: "Cancel", saveTitle: "Save", cancelAction: {}, saveAction: {})
+                }
+                .padding(20)
+            }
+            .background(Color(.systemGroupedBackground))
+        }
+    }
+    return Demo()
+}
+
+#Preview("Gallery — Dark / Brand Components") {
+    enum Filter: String, CaseIterable, Hashable { case week = "Last 7 days", month = "Last 30 days", all = "All time" }
+
+    struct Demo: View {
+        @State private var filter: Filter = .week
+        @State private var digits = "50000"
+
+        var body: some View {
+            ZStack {
+                CostaAuroraBackground(glowCenter: UnitPoint(x: 0.5, y: 0.05), glowColor: .blue)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        HStack(spacing: 12) {
+                            GlassMenuPicker(selection: $filter, options: Filter.allCases) { $0.rawValue }
+                            StyledPillMenuPicker(selection: $filter, options: Filter.allCases) { $0.rawValue }
+                        }
+
+                        StyledTransactionRow(
+                            emoji: "🍔",
+                            colorHex: "#C62828",
+                            title: "Hamburger",
+                            subtitle: "Food",
+                            amountText: "-Rp40.000",
+                            date: Date()
+                        )
+
+                        HStack(spacing: 10) {
+                            StyledAmountChip(title: "Rp 50.000") {}
+                            StyledAmountChip(title: "Rp 100.000") {}
+                            StyledAmountChip(title: "Rp 500.000") {}
+                        }
+
+                        StyledNumericKeypad(onDigit: { digits += $0 }, onBackspace: { if !digits.isEmpty { digits.removeLast() } })
+
+                        StyledGradientButton(title: "Get Started") {}
+
+                        HStack(spacing: 10) {
+                            Circle().fill(CostaColors.appBackground).frame(width: 32, height: 32)
+                                .overlay(Circle().strokeBorder(.white.opacity(0.3)))
+                            Circle().fill(CostaColors.containerBackground).frame(width: 32, height: 32)
+                            Circle().fill(CostaColors.red).frame(width: 32, height: 32)
+                            Circle().fill(CostaColors.green).frame(width: 32, height: 32)
+                            Capsule().fill(CostaColors.gradient).frame(width: 60, height: 32)
+                        }
+                    }
+                    .padding(20)
+                }
+            }
+        }
+    }
+    return Demo()
 }
 
 // MARK: - Previews

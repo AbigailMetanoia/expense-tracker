@@ -142,8 +142,8 @@ struct WalletView: View {
                 Text("Wallet")
                     .font(.largeTitle.weight(.bold))
                     .foregroundStyle(.white)
-                Text("Manage your money, build your goals.")
-                    .font(.subheadline)
+                Text("Manage your money for good")
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.white.opacity(0.6))
             }
             Spacer()
@@ -159,14 +159,7 @@ struct WalletView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(
-                    LinearGradient(
-                        colors: [Color(red: 0.20, green: 0.40, blue: 0.95), Color(red: 0.55, green: 0.60, blue: 0.98)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    in: Capsule()
-                )
+                .background(CostaColors.gradient, in: Capsule())
             }
             .buttonStyle(.plain)
         }
@@ -176,33 +169,36 @@ struct WalletView: View {
 
     private var balanceCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Total Balance")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.7))
+            VStack(alignment: .leading, spacing: 7){
+                Text("Total Balance")
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(.primary)
 
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text("Rp.")
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(.white)
-                Text(wholeAmount(totalBalance))
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(.white)
-                Text(",00")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.4))
-                Spacer(minLength: 0)
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text("Rp.")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.white)
+                    Text(wholeAmount(totalBalance))
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(",00")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.4))
+                    Spacer(minLength: 0)
+                }
             }
+            
 
             HStack {
                 Spacer()
                 StyledPillMenuPicker(selection: $selectedPeriod, options: Period.allCases) { $0.label }
             }
 
-            Divider().overlay(Color.white.opacity(0.15))
+//            Divider().overlay(Color.white.opacity(0.15))
 
             HStack(spacing: 24) {
-                statColumn(title: "Income", periodLabel: selectedPeriod.label, amount: incomeTotal, icon: "arrow.up", tint: .green)
-                statColumn(title: "Expenses", periodLabel: selectedPeriod.label, amount: expensesTotal, icon: "arrow.down", tint: .red)
+                statColumn(title: "Income", periodLabel: selectedPeriod.label, amount: incomeTotal, icon: "arrow.up", tint: CostaColors.green)
+                statColumn(title: "Expenses", periodLabel: selectedPeriod.label, amount: expensesTotal, icon: "arrow.down", tint: CostaColors.red)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -217,14 +213,14 @@ struct WalletView: View {
 
     private func statColumn(title: String, periodLabel: String, amount: Double, icon: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Image(systemName: icon)
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.white)
                     .frame(width: 18, height: 18)
                     .background(tint, in: Circle())
                 Text(title)
-                    .font(.caption)
+                    .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(.white.opacity(0.7))
                 Text("·")
                     .foregroundStyle(.white.opacity(0.4))
@@ -262,9 +258,22 @@ struct WalletView: View {
         }
     }
 
+    /// Real amount spent so far in `pocket.category`, within the current
+    /// period — computed from actual loaded costs, unlike `budgetLimit`
+    /// which is still a locally-set target (no budget API yet).
+    private func spentAmount(for pocket: BudgetPocket) -> Double {
+        displayedRows
+            .filter { row in
+                let rowCategoryId = row.cost.category_id ?? row.cost.category?.id
+                return rowCategoryId != nil && rowCategoryId == pocket.category.id
+            }
+            .reduce(0) { $0 + $1.cost.amount }
+    }
+
     private func budgetPocketCard(_ pocket: BudgetPocket) -> some View {
-        let progress = pocket.budgetLimit > 0 ? min(pocket.amount / pocket.budgetLimit, 1) : 0
-        let left = max(pocket.budgetLimit - pocket.amount, 0)
+        let spent = spentAmount(for: pocket)
+        let progress = pocket.budgetLimit > 0 ? min(spent / pocket.budgetLimit, 1) : 0
+        let left = max(pocket.budgetLimit - spent, 0)
 
         return VStack(alignment: .leading, spacing: 10) {
             ZStack {
@@ -279,13 +288,13 @@ struct WalletView: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.white)
 
-            Text("Rp " + wholeAmount(pocket.amount))
+            Text("Rp " + wholeAmount(spent))
                 .font(.body.weight(.bold))
                 .foregroundStyle(.white)
 
             if pocket.budgetLimit > 0 {
                 ProgressView(value: progress)
-                    .tint(.green)
+                    .tint(progress >= 1 ? CostaColors.red : CostaColors.green)
                     .scaleEffect(x: 1, y: 1.4, anchor: .center)
 
                 Text(wholeAmount(left) + " left")
@@ -295,7 +304,7 @@ struct WalletView: View {
         }
         .padding(16)
         .frame(width: 150, alignment: .leading)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(CostaColors.containerFill, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     // MARK: - Total cost section

@@ -78,13 +78,14 @@ struct RecentExpensesView: View {
                 Image(systemName: "chevron.left")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 50, height: 50)
                     .background(Color.white.opacity(0.1), in: Circle())
             }
             .buttonStyle(.plain)
 
             Text("Recent Expenses")
-                .font(.title2.weight(.bold))
+//                .font(.title2.weight(.bold))
+                .font(.system(size: 27, weight: .bold))
                 .foregroundStyle(.white)
 
             Spacer()
@@ -98,7 +99,7 @@ struct RecentExpensesView: View {
     private func dayGroup(_ group: (label: String, items: [PocketTransaction])) -> some View {
         VStack(spacing: 12) {
             Text(group.label)
-                .font(.caption)
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.white.opacity(0.4))
                 .frame(maxWidth: .infinity, alignment: .center)
 

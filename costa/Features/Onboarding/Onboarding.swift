@@ -27,12 +27,12 @@ struct OnboardingView: View {
 
                     Text("Own Your Money,\nShape \(Text("Your Life.").foregroundStyle(Color(red: 0.55, green: 0.65, blue: 1.0)))")
                         .foregroundStyle(.white)
-                        .font(.system(size: 32, weight: .bold))
-                        .padding(.bottom, 12)
+                        .font(.system(size: 36, weight: .bold))
+                        .padding(.bottom, 15)
 
                     Text("From saving smart to spending wise, your financial goals begin to rise.")
                         .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(.white.opacity(0.8))
                         .padding(.bottom, 28)
 
                     StyledGradientButton(title: "Get Started") {

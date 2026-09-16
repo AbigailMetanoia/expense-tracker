@@ -2,10 +2,9 @@
 //  TopSpendingView.swift
 //  costa
 //
-//  Same structure as RecentExpensesView — grouped by day — but within
-//  each day, transactions are sorted highest-amount-first instead of
-//  most-recent-first, since this screen is about *what* cost the most,
-//  not *when* it happened.
+//  "See All" destination from SpendingView's Top Spending section — same
+//  category ranking, same row style (icon + name + amount), just the
+//  full list instead of a capped preview.
 //
 
 import SwiftUI
@@ -13,31 +12,14 @@ import SwiftUI
 struct TopSpendingView: View {
     @Environment(\.dismiss) private var dismiss
 
-    let transactions: [PocketTransaction]
-    var onSelect: ((PocketTransaction) -> Void)?
+    /// Sorted highest-amount-first — same ranking logic as
+    /// `SpendingView.categoryBreakdown`.
+    let categories: [SpendingCategorySlice]
+    var onSelect: ((SpendingCategorySlice) -> Void)?
 
-    init(transactions: [PocketTransaction], onSelect: ((PocketTransaction) -> Void)? = nil) {
-        self.transactions = transactions
+    init(categories: [SpendingCategorySlice], onSelect: ((SpendingCategorySlice) -> Void)? = nil) {
+        self.categories = categories.sorted { $0.amount > $1.amount }
         self.onSelect = onSelect
-    }
-
-    private var groupedByDay: [(label: String, items: [PocketTransaction])] {
-        let calendar = Calendar.current
-        let groups = Dictionary(grouping: transactions) { calendar.startOfDay(for: $0.date) }
-        return groups.keys.sorted(by: >).map { day in
-            let label: String
-            if calendar.isDateInToday(day) {
-                label = "Today"
-            } else if calendar.isDateInYesterday(day) {
-                label = "Yesterday"
-            } else {
-                label = day.formatted(date: .abbreviated, time: .omitted)
-            }
-            // Highest spend first within the day — this is the one
-            // difference from RecentExpensesView's chronological sort.
-            let items = groups[day]!.sorted { $0.amount > $1.amount }
-            return (label, items)
-        }
     }
 
     var body: some View {
@@ -48,15 +30,15 @@ struct TopSpendingView: View {
                 header
 
                 ScrollView {
-                    if transactions.isEmpty {
+                    if categories.isEmpty {
                         Text("No spending recorded yet.")
                             .font(.subheadline)
                             .foregroundStyle(.white.opacity(0.5))
                             .padding(.top, 40)
                     } else {
-                        VStack(spacing: 20) {
-                            ForEach(groupedByDay, id: \.label) { group in
-                                dayGroup(group)
+                        VStack(spacing: 12) {
+                            ForEach(categories) { item in
+                                row(item)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -85,41 +67,28 @@ struct TopSpendingView: View {
             .buttonStyle(.plain)
 
             Text("Top Spending")
-                .font(.title2.weight(.bold))
+                .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(.white)
 
             Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
+        .padding(.bottom,10)
     }
 
-    // MARK: - Day group
+    // MARK: - Row (matches SpendingView's topSpendingRow exactly)
 
-    private func dayGroup(_ group: (label: String, items: [PocketTransaction])) -> some View {
-        VStack(spacing: 12) {
-            Text(group.label)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.4))
-                .frame(maxWidth: .infinity, alignment: .center)
-
-            ForEach(group.items) { tx in
-                row(tx, dayLabel: group.label)
-            }
-        }
-    }
-
-    private func row(_ tx: PocketTransaction, dayLabel: String) -> some View {
+    private func row(_ item: SpendingCategorySlice) -> some View {
         Button {
-            onSelect?(tx)
+            onSelect?(item)
         } label: {
-            StyledTransactionRow(
-                emoji: tx.emoji,
-                colorHex: tx.colorHex,
-                title: tx.name,
-                subtitle: "\(dayLabel), \(tx.date.formatted(date: .omitted, time: .shortened))",
-                amountText: "-Rp" + formatted(tx.amount)
+            StyledCategoryAmountRow(
+                emoji: item.emoji,
+                title: item.name,
+                amountText: "Rp. " + formatted(item.amount)
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(onSelect == nil)
@@ -137,23 +106,15 @@ struct TopSpendingView: View {
 }
 
 #Preview {
-    let calendar = Calendar.current
-    let today = Date()
-    let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
-
-    NavigationStack {
-        TopSpendingView(
-            transactions: [
-                PocketTransaction(id: "1", name: "Hamburger", date: today, amount: 40_000, emoji: "🍔", colorHex: "#C62828"),
-                PocketTransaction(id: "2", name: "Laundry", date: today, amount: 10_000, emoji: "🧺", colorHex: "#00796B"),
-                PocketTransaction(id: "3", name: "Groceries", date: today, amount: 100_000, emoji: "🛍️", colorHex: "#2E7D32"),
-                PocketTransaction(id: "4", name: "Gasoline", date: today, amount: 50_000, emoji: "⛽", colorHex: "#1565C0"),
-                PocketTransaction(id: "5", name: "Hamburger", date: yesterday, amount: 40_000, emoji: "🍔", colorHex: "#C62828"),
-                PocketTransaction(id: "6", name: "Laundry", date: yesterday, amount: 10_000, emoji: "🧺", colorHex: "#00796B"),
-                PocketTransaction(id: "7", name: "Groceries", date: yesterday, amount: 100_000, emoji: "🛍️", colorHex: "#2E7D32")
-            ]
-        ) { tx in
-            print("Tapped: \(tx.name)")
-        }
+    TopSpendingView(
+        categories: [
+            SpendingCategorySlice(id: "food", name: "Food", emoji: "🍔", amount: 350_000, color: CostaColors.blueShades[0]),
+            SpendingCategorySlice(id: "transport", name: "Transportation", emoji: "🚗", amount: 300_000, color: CostaColors.blueShades[1]),
+            SpendingCategorySlice(id: "house", name: "House", emoji: "🏠", amount: 250_000, color: CostaColors.blueShades[2]),
+            SpendingCategorySlice(id: "shopping", name: "Shopping", emoji: "🛍️", amount: 150_000, color: CostaColors.blueShades[3]),
+            SpendingCategorySlice(id: "health", name: "Health", emoji: "💊", amount: 100_000, color: CostaColors.blueShades[4])
+        ]
+    ) { item in
+        print("Tapped: \(item.name)")
     }
 }

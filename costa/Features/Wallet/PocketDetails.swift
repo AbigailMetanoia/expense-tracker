@@ -69,6 +69,7 @@ struct PocketDetailsView: View {
                     Text("Recent Transactions")
                         .font(.headline)
                         .foregroundStyle(.white)
+                        .foregroundStyle(.white)
 
                     if transactions.isEmpty {
                         Text("No transactions yet in this pocket.")

@@ -40,9 +40,9 @@ struct LoginView: View {
                         .foregroundStyle(.white)
 
                     Text("Please enter required details.")
-                        .font(.subheadline)
+                        .font(.system(size: 17, weight: .regular))
                         .foregroundStyle(.white.opacity(0.6))
-                        .padding(.top, 4)
+                        .padding(.top, 5)
                         .padding(.bottom, 32)
 
                     VStack(alignment: .leading, spacing: 20) {
@@ -77,20 +77,17 @@ struct LoginView: View {
                             Rectangle().fill(Color.white.opacity(0.15)).frame(height: 1)
                             Text("Or")
                                 .font(.caption)
-                                .foregroundStyle(.white.opacity(0.5))
+                                .foregroundStyle(.white.opacity(0.6))
                             Rectangle().fill(Color.white.opacity(0.15)).frame(height: 1)
                         }
 
                         Button {
                             errorMessage = nil
                             startGoogleSignIn()
+                            
                         } label: {
                             HStack(spacing: 8) {
-                                // TODO: add a "google_logo" image asset (the
-                                // multicolor "G" mark) for an exact match.
-                                // Falls back to a plain globe glyph so this
-                                // still compiles without that asset.
-                                Image(systemName: "globe")
+                                Image("google")
                                     .foregroundStyle(.blue)
                                 Text("Sign in with Google")
                                     .font(.body.weight(.semibold))
@@ -109,21 +106,21 @@ struct LoginView: View {
                                 .foregroundStyle(.red)
                         }
                     }
-                    .padding(20)
+                    .padding(.vertical, 30)
+                    .padding(.horizontal, 25)
                     .background(
                         ZStack {
                             Rectangle().fill(.ultraThinMaterial)
-                            Rectangle().fill(Color.black.opacity(0.55))
+                            Rectangle().fill(Color.black.opacity(0.65))
                         }
-                        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        RoundedRectangle(cornerRadius: 30, style: .continuous)
                             .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
                     )
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 40)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
