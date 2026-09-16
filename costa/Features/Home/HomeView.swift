@@ -3,25 +3,30 @@
 //  costa
 //
 
-import Charts
 import SwiftUI
 
 struct HomeView: View {
     enum TimeFilter: String, CaseIterable, Hashable {
+        case today
         case last7Days
         case last30Days
         case all
 
+        /// Short label for the pill chip — the previous labels ("Expenses
+        /// last 7 days") were sized for a full-width row, not a small
+        /// dropdown pill like the new design uses.
         var label: String {
             switch self {
-            case .last7Days:  "Expenses last 7 days"
-            case .last30Days: "Expenses last 30 days"
-            case .all:        "Expenses all time"
+            case .today:      "Today"
+            case .last7Days:  "This Week"
+            case .last30Days: "This Month"
+            case .all:        "All Time"
             }
         }
 
         var chartDays: Int {
             switch self {
+            case .today:      1
             case .last7Days:  7
             case .last30Days: 30
             case .all:        90
@@ -32,6 +37,7 @@ struct HomeView: View {
             let calendar = Calendar.current
             let today = calendar.startOfDay(for: Date())
             switch self {
+            case .today:      return today
             case .last7Days:  return calendar.date(byAdding: .day, value: -6, to: today)
             case .last30Days: return calendar.date(byAdding: .day, value: -29, to: today)
             case .all:        return nil
@@ -40,12 +46,24 @@ struct HomeView: View {
     }
 
     @Environment(AuthController.self) private var auth
-    @State private var viewModel = HomeViewModel()
+    @State private var viewModel: HomeViewModel
     @State private var showSignOutConfirmation = false
     @State private var selectedFilter: TimeFilter = .last7Days
+    @State private var isAmountHidden = false
+    @State private var showRecentExpenses = false
     @Binding var selectedCost: Cost?
     /// Parent increments this after a cost line is edited so we refetch lists and chart.
     var refreshCostsToken: Int = 0
+
+    init(
+        selectedCost: Binding<Cost?>,
+        refreshCostsToken: Int = 0,
+        viewModel: HomeViewModel = HomeViewModel()
+    ) {
+        self._selectedCost = selectedCost
+        self.refreshCostsToken = refreshCostsToken
+        _viewModel = State(initialValue: viewModel)
+    }
 
     private var firstName: String {
         auth.user?.email?.components(separatedBy: "@").first?.capitalized ?? "there"
@@ -68,39 +86,39 @@ struct HomeView: View {
         displayedRows.reduce(0) { $0 + $1.cost.amount }
     }
 
-    /// Distinct parent expenses represented in the filtered rows.
-    private var displayedExpenseCount: Int {
-        Set(displayedRows.map(\.expenseId)).count
-    }
-
     private var displayedRecentCosts: [Cost] {
         Array(displayedRows.prefix(10).map(\.cost))
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                headerSection
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
+        ZStack {
+            CostaAuroraBackground(glowCenter: UnitPoint(x: 0.5, y: 0.05), glowColor: .blue)
 
-                summaryCard
-                    .padding(.horizontal, 16)
-                    .padding(.top, 20)
-                    // Extra vertical padding so the shadow isn't clipped
-                    // by adjacent scroll content
-                    .padding(.bottom, 6)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    headerSection
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
 
-                recentSection
-                    .padding(.top, 18)
-                    .padding(.bottom, 24)
+                    filterChip
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+
+                    summaryCard
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+
+                    incomeExpenseRow
+                        .padding(.horizontal, 20)
+                        .padding(.top, 14)
+
+                    recentSection
+                        .padding(.horizontal, 20)
+                        .padding(.top, 24)
+                        .padding(.bottom, 100) // room above the floating tab bar
+                }
             }
-            // Horizontal padding so card side-shadows aren't cut off
-            .padding(.horizontal, 2)
         }
-        // Allow shadows to render outside the scroll view's clip region
-        .scrollClipDisabled()
-        .background(Color(.systemGroupedBackground))
         .refreshable { await reload() }
         .task(id: selectedFilter) {
             guard let token = await auth.validToken() else { return }
@@ -114,7 +132,7 @@ struct HomeView: View {
         }
         .overlay {
             if viewModel.isLoading && viewModel.rows.isEmpty {
-                ProgressView()
+                ProgressView().tint(.white)
             }
         }
         .alert("Sign Out", isPresented: $showSignOutConfirmation) {
@@ -125,71 +143,112 @@ struct HomeView: View {
         } message: {
             Text(auth.user?.email ?? "Are you sure you want to sign out?")
         }
+        .sheet(isPresented: $showRecentExpenses) {
+            // NOTE: RecentExpensesView takes `[PocketTransaction]`, a
+            // lighter display model, while Home works with real `[Cost]`.
+            // This maps one to the other for display only — swap in a
+            // real transaction fetch here if RecentExpensesView should
+            // show more than what's already loaded on Home.
+            RecentExpensesView(transactions: displayedRecentCosts.map { $0.asPocketTransaction() })
+        }
     }
 
     // MARK: - Header
 
     private var headerSection: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Welcome")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text("\(firstName) \u{1F44B}")
-                    .font(.title2.bold())
-            }
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color.green.opacity(0.2))
+                .frame(width: 44, height: 44)
+                .overlay {
+                    Text(String(firstName.prefix(1)).uppercased())
+                        .font(.headline.bold())
+                        .foregroundStyle(.green)
+                }
+
+            Text("Hello, \(firstName) \u{1F44B}")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white)
+
             Spacer()
+
             Button {
                 showSignOutConfirmation = true
             } label: {
-                Circle()
-                    .fill(Color.green.opacity(0.2))
-                    .frame(width: 44, height: 44)
-                    .overlay {
-                        Text(String(firstName.prefix(1)).uppercased())
-                            .font(.headline.bold())
-                            .foregroundStyle(.green)
-                    }
+                Image(systemName: "ellipsis")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(Color.white.opacity(0.1), in: Circle())
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Filter chip
+
+    private var filterChip: some View {
+        HStack {
+            StyledPillMenuPicker(
+                selection: $selectedFilter,
+                options: TimeFilter.allCases
+            ) { $0.label }
+            Spacer()
         }
     }
 
     // MARK: - Summary card
 
     private var summaryCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Period picker
-            GlassMenuPicker(
-                selection: $selectedFilter,
-                options: TimeFilter.allCases
-            ) { $0.label }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Text("Total Spending")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.7))
+                Button {
+                    isAmountHidden.toggle()
+                } label: {
+                    Image(systemName: isAmountHidden ? "eye.slash" : "eye")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+            }
 
-            // Total
-            VStack(alignment: .leading, spacing: 4) {
-                Text(displayedTotalAmount, format: .currency(code: currencyCode))
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-
-                if !displayedRows.isEmpty {
-                    HStack(spacing: 4) {
-                        Image(systemName: "doc.text")
-                            .font(.caption)
-                            .foregroundStyle(.blue)
-                        Text("Receipt \(displayedExpenseCount)")
-                            .font(.subheadline)
-                            .foregroundStyle(.black)
-                        Image(systemName: "chevron.right")
-                            .font(.caption2)
-                            .foregroundStyle(.black)
-                    }
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                if isAmountHidden {
+                    Text("Rp. ••••••••")
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundStyle(.white)
+                } else {
+                    Text("Rp.")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.white)
+                    Text(wholeAmountText(displayedTotalAmount))
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(",00")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.4))
                 }
             }
 
-            // Chart
-            spendingChart
+            // NOTE: comparison-to-last-month isn't available yet — Home
+            // only fetches the current filter's rows and a daily summary,
+            // not a prior-period total. Wire this once the API can return
+            // (or we can compute) last month's total for comparison.
+            if let trend = spendingTrendPlaceholder {
+                HStack(spacing: 6) {
+                    Image(systemName: trend.isIncrease ? "arrow.up" : "arrow.down")
+                        .font(.caption2.weight(.bold))
+                    Text(trend.text)
+                        .font(.caption.weight(.medium))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(trend.isIncrease ? Color.red.opacity(0.3) : Color.green.opacity(0.3), in: Capsule())
+            }
 
             if let err = viewModel.errorMessage {
                 Text(err)
@@ -197,96 +256,62 @@ struct HomeView: View {
                     .foregroundStyle(.red)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
-        .background(
-            // Use background shape instead of clipShape so child shadows
-            // (e.g. GlassMenuPicker) are not masked by the card boundary.
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.06), radius: 12, x: 0, y: 4)
-        )
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
-    // MARK: - Chart
+    /// Placeholder trend text — see the NOTE above `summaryCard`.
+    private var spendingTrendPlaceholder: (isIncrease: Bool, text: String)? {
+        guard displayedTotalAmount > 0 else { return nil }
+        return (false, "Rp\(shortAmount(displayedTotalAmount)) from last month")
+    }
 
-    private var spendingChart: some View {
-        let data = viewModel.chartData
-        let maxVal = data.map(\.total).max() ?? 1
-        let cal = Calendar.current
-        // Use the days that were actually loaded — not selectedFilter — so the
-        // axis label format and stride only change when the new data arrives.
-        let days = viewModel.loadedChartDays
+    // MARK: - Income / Expenses row
 
-        // Stride and label format adapt to the date range so labels never overlap:
-        //   ≤ 7 days  → daily stride, "Mon" / "Today"
-        //   ≤ 30 days → weekly stride, "Jan 5"
-        //   > 30 days → monthly stride, "Jan" / "Jan '25"
-        let strideComponent: Calendar.Component = days <= 7 ? .day : days <= 30 ? .weekOfYear : .month
-        let labelFormat: (Date) -> String = { date in
-            if days <= 7 {
-                return cal.isDateInToday(date) ? "Today" : date.formatted(.dateTime.weekday(.abbreviated))
-            } else if days <= 30 {
-                return date.formatted(.dateTime.month(.abbreviated).day())
-            } else {
-                return date.formatted(.dateTime.month(.abbreviated))
+    private var incomeExpenseRow: some View {
+        HStack(spacing: 12) {
+            statCard(
+                title: "Income",
+                amount: incomeTotalPlaceholder,
+                icon: "arrow.up",
+                tint: .green
+            )
+            statCard(
+                title: "Expenses",
+                amount: displayedTotalAmount,
+                icon: "arrow.down",
+                tint: .red
+            )
+        }
+    }
+
+    /// NOTE: there's no income endpoint in the current API client, so this
+    /// is a stub. Replace with `viewModel.incomeTotal` (or similar) once
+    /// income tracking is wired up on the backend.
+    private var incomeTotalPlaceholder: Double { 0 }
+
+    private func statCard(title: String, amount: Double, icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 18, height: 18)
+                    .background(tint, in: Circle())
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
             }
+            Text("Rp. " + wholeAmountText(amount))
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-
-        return Chart(data) { point in
-            AreaMark(
-                x: .value("Day", point.date, unit: .day),
-                y: .value("Amount", point.total)
-            )
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [Color.green.opacity(0.45), Color.green.opacity(0.03)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .interpolationMethod(.catmullRom)
-
-            LineMark(
-                x: .value("Day", point.date, unit: .day),
-                y: .value("Amount", point.total)
-            )
-            .foregroundStyle(Color.green)
-            .lineStyle(StrokeStyle(lineWidth: 2.5))
-            .interpolationMethod(.catmullRom)
-
-            PointMark(
-                x: .value("Day", point.date, unit: .day),
-                y: .value("Amount", point.total)
-            )
-            .foregroundStyle(Color.green)
-            .symbolSize(data.last?.id == point.id ? 55 : 0)
-        }
-        .chartXAxis {
-            AxisMarks(values: .stride(by: strideComponent)) { val in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3, dash: [4]))
-                    .foregroundStyle(Color.secondary.opacity(0.3))
-                AxisValueLabel {
-                    if let date = val.as(Date.self) {
-                        Text(labelFormat(date))
-                            .font(.caption2)
-                            .foregroundStyle(cal.isDateInToday(date) ? Color.green : Color.secondary)
-                    }
-                }
-            }
-        }
-        .chartYAxis {
-            AxisMarks(position: .trailing, values: [0, maxVal]) { val in
-                AxisValueLabel {
-                    if let v = val.as(Double.self) {
-                        Text(v == 0 ? "Rp0" : shortAmount(v))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-        .chartYScale(domain: 0 ... max(maxVal * 1.2, 1))
-        .frame(height: 140)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     // MARK: - Recent expenses
@@ -296,25 +321,26 @@ struct HomeView: View {
             HStack {
                 Text("Recent Expenses")
                     .font(.headline)
+                    .foregroundStyle(.white)
                 Spacer()
                 Button {
+                    showRecentExpenses = true
                 } label: {
                     HStack(spacing: 2) {
                         Text("See All")
                             .font(.subheadline)
-                            .foregroundStyle(.green)
                         Image(systemName: "chevron.right")
                             .font(.caption)
-                            .foregroundStyle(.green)
                     }
+                    .foregroundStyle(.white.opacity(0.7))
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 20)
 
             if displayedRows.isEmpty && !viewModel.isLoading {
                 Text("No expenses yet.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.5))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 32)
             } else {
@@ -325,7 +351,7 @@ struct HomeView: View {
                         } label: {
                             CostRowView(cost: cost)
                         }
-                        .padding(.horizontal, 16)
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -340,102 +366,104 @@ struct HomeView: View {
     }
 
     private func shortAmount(_ value: Double) -> String {
-        if value >= 1_000_000 { return "Rp\(Int(value / 1_000_000))M" }
-        if value >= 1_000 { return "Rp\(Int(value / 1_000))K" }
-        return "Rp\(Int(value))"
+        if value >= 1_000_000 { return "\(Int(value / 1_000_000))M" }
+        if value >= 1_000 { return "\(Int(value / 1_000))K" }
+        return "\(Int(value))"
+    }
+
+    private func wholeAmountText(_ value: Double) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.locale = Locale(identifier: "id_ID")
+        f.maximumFractionDigits = 0
+        return f.string(from: NSNumber(value: value)) ?? "\(Int(value))"
     }
 }
 
 // MARK: - Cost row
 
+/// Thin wrapper around the shared `StyledTransactionRow`, so Home's
+/// transaction list looks identical to Wallet/Pocket/TopSpending's.
 struct CostRowView: View {
     let cost: Cost
 
-    /// API `category.color` on the tag only; name fallback when unset / invalid hex.
-    private var tagTint: Color {
-        if let raw = cost.category?.color?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !raw.isEmpty,
-           let parsed = Color(hex: raw) {
-            return parsed
-        }
-        return fallbackTintFromCategoryName
-    }
-
-    private var iconBackground: Color {
-        switch cost.category?.name.lowercased() {
-        case "transportation", "transport": return Color.teal.opacity(0.15)
-        case "food", "food & drink": return Color.orange.opacity(0.15)
-        case "laundry": return Color.purple.opacity(0.15)
-        case "health": return Color.red.opacity(0.15)
-        case "entertainment": return Color.blue.opacity(0.15)
-        default: return Color.green.opacity(0.15)
-        }
-    }
-
-    private var fallbackTintFromCategoryName: Color {
-        switch cost.category?.name.lowercased() {
-        case "transportation", "transport": return .teal
-        case "food", "food & drink": return .orange
-        case "laundry": return .purple
-        case "health": return .red
-        case "entertainment": return .blue
-        default: return .green
-        }
-    }
-
     var body: some View {
-        HStack(spacing: 14) {
-            // Icon
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(iconBackground)
-                    .frame(width: 48, height: 48)
-                Text(cost.category?.emoji.isEmpty == false ? cost.category!.emoji : defaultEmoji)
-                    .font(.title3)
-            }
-
-            // Title + category tag (uses API category color)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(cost.name)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                HStack(spacing: 6) {
-                    Text("1 pack")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if let cat = cost.category?.name {
-                        Text(cat)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(tagTint)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .overlay(Capsule().strokeBorder(tagTint.opacity(0.6), lineWidth: 1))
-                    }
-                }
-            }
-
-            Spacer()
-
-            Text(cost.amount, format: .currency(code: cost.currency))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-        }
-        .padding(14)
-        .background(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 2)
+        StyledTransactionRow(
+            emoji: cost.category?.emoji.isEmpty == false ? cost.category!.emoji : "💳",
+            colorHex: cost.category?.color,
+            title: cost.name,
+            subtitle: cost.category?.name ?? "Uncategorized",
+            amountText: "-Rp" + wholeAmount(cost.amount)
+        )
     }
 
-    private var defaultEmoji: String {
-        switch cost.category?.name.lowercased() {
-        case "transportation", "transport": return "🚗"
-        case "food", "food & drink": return "🍔"
-        case "laundry": return "🧺"
-        case "health": return "💊"
-        case "entertainment": return "🎬"
-        default: return "💳"
-        }
+    private func wholeAmount(_ value: Double) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.locale = Locale(identifier: "id_ID")
+        f.maximumFractionDigits = 0
+        return f.string(from: NSNumber(value: value)) ?? "\(Int(value))"
     }
+}
+
+// MARK: - Cost -> PocketTransaction bridge
+
+extension Cost {
+    /// Maps a real `Cost` into the lighter `PocketTransaction` shape that
+    /// RecentExpensesView/PocketDetailsView expect. `date` falls back to
+    /// `.now` since `Cost` itself doesn't carry a timestamp — pass the
+    /// parent expense's date in if you have it available at the call site.
+    func asPocketTransaction() -> PocketTransaction {
+        PocketTransaction(
+            id: id,
+            name: name,
+            date: .now,
+            amount: amount,
+            emoji: category?.emoji.isEmpty == false ? category!.emoji : "💳",
+            colorHex: category?.color
+        )
+    }
+}
+
+#Preview("Single recent expense") {
+    CostRowView(
+        cost: Cost(
+            id: "preview-1",
+            user_id: nil,
+            name: "Hamburger",
+            amount: 40_000,
+            currency: "IDR",
+            created_at: nil,
+            updated_at: nil,
+            category_id: "food",
+            category: CostCategory(id: "food", emoji: "🍔", name: "Food", color: "#C62828", is_generated_by_ai: false)
+        )
+    )
+    .padding()
+    .background(Color(red: 0.04, green: 0.09, blue: 0.15))
+}
+
+#Preview("Recent Expenses — 1 example") {
+    let vm = HomeViewModel()
+    vm.rows = [
+        HomeCostRow(
+            cost: Cost(
+                id: "preview-1",
+                user_id: nil,
+                name: "Hamburger",
+                amount: 40_000,
+                currency: "IDR",
+                created_at: nil,
+                updated_at: nil,
+                category_id: "food",
+                category: CostCategory(id: "food", emoji: "🍔", name: "Food", color: "#C62828", is_generated_by_ai: false)
+            ),
+            expenseId: "preview-expense-1",
+            expenseDate: Date()
+        )
+    ]
+    return HomeView(selectedCost: .constant(nil), viewModel: vm)
+        .environment(AuthController())
 }
 
 #Preview {

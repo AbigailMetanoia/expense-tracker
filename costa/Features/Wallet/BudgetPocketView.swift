@@ -17,6 +17,11 @@ struct BudgetPocket: Identifiable {
     var id: String
     var category: CostCategory
     var amount: Double
+    /// The budget target for this pocket, used for the progress bar on
+    /// WalletView's pocket cards ("X left" = budgetLimit - amount).
+    /// Defaults to 0 (no progress shown) for call sites that only care
+    /// about `amount` (BudgetPocketsView, TotalCostView).
+    var budgetLimit: Double = 0
 }
 
 struct BudgetPocketsView: View {

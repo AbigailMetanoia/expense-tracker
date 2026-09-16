@@ -1,19 +1,20 @@
 //
-//  TopSpendingView.swift
+//  RecentExpensesView.swift
 //  costa
 //
-//  Same structure as RecentExpensesView — grouped by day — but within
-//  each day, transactions are sorted highest-amount-first instead of
-//  most-recent-first, since this screen is about *what* cost the most,
-//  not *when* it happened.
+//  Full transaction history, grouped by day (Today, Yesterday, then the
+//  actual date further back). Reuses `PocketTransaction` since the data
+//  shape is identical to what PocketDetailsView needs.
 //
 
 import SwiftUI
 
-struct TopSpendingView: View {
+struct RecentExpensesView: View {
     @Environment(\.dismiss) private var dismiss
 
     let transactions: [PocketTransaction]
+    /// Called when a row is tapped — e.g. to open that transaction for
+    /// editing. Rows are plain (non-interactive) if nil.
     var onSelect: ((PocketTransaction) -> Void)?
 
     init(transactions: [PocketTransaction], onSelect: ((PocketTransaction) -> Void)? = nil) {
@@ -33,9 +34,7 @@ struct TopSpendingView: View {
             } else {
                 label = day.formatted(date: .abbreviated, time: .omitted)
             }
-            // Highest spend first within the day — this is the one
-            // difference from RecentExpensesView's chronological sort.
-            let items = groups[day]!.sorted { $0.amount > $1.amount }
+            let items = groups[day]!.sorted { $0.date > $1.date }
             return (label, items)
         }
     }
@@ -49,7 +48,7 @@ struct TopSpendingView: View {
 
                 ScrollView {
                     if transactions.isEmpty {
-                        Text("No spending recorded yet.")
+                        Text("No expenses yet.")
                             .font(.subheadline)
                             .foregroundStyle(.white.opacity(0.5))
                             .padding(.top, 40)
@@ -84,7 +83,7 @@ struct TopSpendingView: View {
             }
             .buttonStyle(.plain)
 
-            Text("Top Spending")
+            Text("Recent Expenses")
                 .font(.title2.weight(.bold))
                 .foregroundStyle(.white)
 
@@ -142,7 +141,7 @@ struct TopSpendingView: View {
     let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
 
     NavigationStack {
-        TopSpendingView(
+        RecentExpensesView(
             transactions: [
                 PocketTransaction(id: "1", name: "Hamburger", date: today, amount: 40_000, emoji: "🍔", colorHex: "#C62828"),
                 PocketTransaction(id: "2", name: "Laundry", date: today, amount: 10_000, emoji: "🧺", colorHex: "#00796B"),

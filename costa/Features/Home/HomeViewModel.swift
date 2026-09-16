@@ -27,6 +27,14 @@ final class HomeViewModel {
     var isLoading = false
     var errorMessage: String?
 
+    /// Explicit, `nonisolated` no-arg init. All stored properties already
+    /// have default values, so this doesn't touch any main-actor-isolated
+    /// state — it just lets `HomeViewModel()` be used as a default
+    /// parameter value elsewhere (e.g. `HomeView`'s init) without Swift
+    /// complaining about calling a main-actor-isolated initializer from a
+    /// synchronous nonisolated context.
+    nonisolated init() {}
+
     var totalAmount: Double {
         rows.reduce(0) { $0 + $1.cost.amount }
     }

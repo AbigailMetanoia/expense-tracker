@@ -730,6 +730,82 @@ struct StyledAmountChip: View {
     }
 }
 
+// MARK: - StyledTransactionRow
+//
+// A single transaction row (icon + title/subtitle + amount) in its own
+// rounded card — used by RecentExpensesView, PocketDetailsView, and
+// anywhere else a transaction list shows up.
+struct StyledTransactionRow: View {
+    let emoji: String
+    let colorHex: String?
+    let title: String
+    let subtitle: String
+    let amountText: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill((Color(hex: colorHex ?? "") ?? .blue).opacity(0.3))
+                    .frame(width: 44, height: 44)
+                Text(emoji)
+                    .font(.title3)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+
+            Spacer()
+
+            Text(amountText)
+                .font(.body.weight(.bold))
+                .foregroundStyle(.white)
+        }
+        .padding(14)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+// MARK: - StyledPillMenuPicker
+//
+// A plain dropdown pill — no material/glass, just a subtle flat
+// background — for period pickers like "Today ▾" that sit directly on
+// content rather than floating over a photo/gradient (that's what
+// GlassMenuPicker is for).
+struct StyledPillMenuPicker<Option: Hashable>: View {
+    @Binding var selection: Option
+    let options: [Option]
+    let label: (Option) -> String
+
+    var body: some View {
+        Menu {
+            ForEach(options, id: \.self) { option in
+                Button(label(option)) {
+                    selection = option
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(label(selection))
+                    .font(.subheadline.weight(.medium))
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color.white.opacity(0.1), in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - Previews
 
 #Preview("StyledTextField") {
