@@ -253,14 +253,28 @@ struct WalletView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal,18)
-        .padding(.vertical,20)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 20)
         .background(
-            Image("Gradient3")
-                .resizable()
-                .scaledToFill()
+            ZStack {
+                CostaColors.containerFill.opacity(0.1)
+                Image("Gradient3")
+                    .resizable()
+                    .scaledToFill()
+            }
         )
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(.white.opacity(0.15), lineWidth: 1)
+        )
+//        .background {
+//            RoundedRectangle(cornerRadius: 20, style: .continuous)
+//                .fill(.ultraThinMaterial)
+//                .blur(radius: 0.5)
+//        }
+        .shadow(color: .black.opacity(0.35), radius: 24, x: 0, y: 14)
+//        .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
     }
 
     private func statColumn(title: String, periodLabel: String, amount: Double, icon: String, tint: Color) -> some View {
