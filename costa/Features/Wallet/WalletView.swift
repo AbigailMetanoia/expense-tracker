@@ -196,19 +196,23 @@ struct WalletView: View {
 
 //            Divider().overlay(Color.white.opacity(0.15))
 
-            HStack(spacing: 24) {
+            HStack(spacing: 10) {
                 statColumn(title: "Income", periodLabel: selectedPeriod.label, amount: incomeTotal, icon: "arrow.up", tint: CostaColors.green)
+                
+                Divider().overlay(Color.white.opacity(0.15))
+                
                 statColumn(title: "Expenses", periodLabel: selectedPeriod.label, amount: expensesTotal, icon: "arrow.down", tint: CostaColors.red)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
+        .padding(.horizontal,18)
+        .padding(.vertical,20)
         .background(
             Image("Gradient3")
                 .resizable()
                 .scaledToFill()
         )
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private func statColumn(title: String, periodLabel: String, amount: Double, icon: String, tint: Color) -> some View {
@@ -221,16 +225,16 @@ struct WalletView: View {
                     .background(tint, in: Circle())
                 Text(title)
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.primary)
                 Text("·")
                     .foregroundStyle(.white.opacity(0.4))
                 Text(periodLabel)
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.7))
             }
             Text(wholeAmount(amount))
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(.white)
+                .font(.system(size: 21, weight: .semibold))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
@@ -248,7 +252,7 @@ struct WalletView: View {
                     .foregroundStyle(.white.opacity(0.5))
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 15) {
                         ForEach(pockets) { pocket in
                             budgetPocketCard(pocket)
                         }
@@ -278,19 +282,22 @@ struct WalletView: View {
         return VStack(alignment: .leading, spacing: 10) {
             ZStack {
                 Circle()
-                    .fill((Color(hex: pocket.category.color ?? "") ?? .blue).opacity(0.3))
+//                    .fill((Color(hex: pocket.category.color ?? "") ?? .blue).opacity(0.3))
+                    .fill(CostaColors.circleContainer)
                     .frame(width: 40, height: 40)
                 Text(pocket.category.emoji)
-                    .font(.title3)
+                    .font(.system(size: 21, weight: .regular))
             }
+            
+            VStack(alignment: .leading, spacing: 3){
+                Text(pocket.category.name)
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(.primary)
 
-            Text(pocket.category.name)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white)
-
-            Text("Rp " + wholeAmount(spent))
-                .font(.body.weight(.bold))
-                .foregroundStyle(.white)
+                Text("Rp " + wholeAmount(spent))
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+            }
 
             if pocket.budgetLimit > 0 {
                 ProgressView(value: progress)
@@ -298,8 +305,8 @@ struct WalletView: View {
                     .scaleEffect(x: 1, y: 1.4, anchor: .center)
 
                 Text(wholeAmount(left) + " left")
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.7))
             }
         }
         .padding(16)

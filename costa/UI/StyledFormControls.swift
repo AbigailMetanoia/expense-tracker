@@ -2,12 +2,6 @@
 //  StyledFormControls.swift
 //  costa
 //
-//  All shared form-building blocks in one file: color hex parsing, the
-//  pill-shaped text/select fields used across sheets, the glass filter
-//  picker, and the small drag-handle + action-button pair used to close
-//  out a form sheet. Kept together on purpose so there's one place to
-//  tweak the shared look instead of hunting across several files.
-//
 
 import SwiftUI
 import UIKit
@@ -15,7 +9,6 @@ import UIKit
 // MARK: - Color+Hex
 
 extension Color {
-    /// Parses `#RGB`, `#RRGGBB`, or `#RRGGBBAA` (case-insensitive). Returns `nil` if invalid or empty.
     init?(hex: String) {
         var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         guard s.hasPrefix("#") else { return nil }
@@ -41,8 +34,6 @@ extension Color {
         self.init(red: r, green: g, blue: b, opacity: a)
     }
 
-    /// Best-effort `#RRGGBB` hex string, used to persist a color chosen via
-    /// the native `ColorPicker` (which hands back a `Color`, not a hex string).
     func toHex() -> String? {
         guard let components = UIColor(self).cgColor.components, components.count >= 3 else { return nil }
         let r = Int((components[0] * 255).rounded())
@@ -52,33 +43,19 @@ extension Color {
     }
 }
 
-// MARK: - Shared field shape
-
-/// Every field in the HiFi form (Name, Quantity, Unit Price, Category) is a
-/// fully-rounded pill rather than a soft rounded-rect — this is the one
-/// place that decides that, so all fields stay in sync.
 private let fieldShape = Capsule(style: .continuous)
 private let fieldFill = Color(uiColor: .secondarySystemFill)
 
 // MARK: - StyledTextField
 
-/// A reusable text-field block styled like the receipt detail form.
 struct StyledTextField: View {
     let title: String
     let placeholder: String
     @Binding var text: String
-
-    /// Optional short leading text rendered in its own pill (e.g. "IDR").
     var leadingText: String?
-    /// Optional short trailing text rendered inside the field itself (e.g. "%").
     var trailingText: String?
     var keyboardType: UIKeyboardType = .default
-    /// Renders a `SecureField` instead of `TextField` (for passwords).
     var isSecure: Bool = false
-    /// These three exist as explicit params — not applied from outside —
-    /// because modifiers chained onto this view from a call site land on
-    /// the outer `VStack`, not the `TextField`/`SecureField` inside it, so
-    /// they'd silently do nothing.
     var textContentType: UITextContentType? = nil
     var autocapitalization: TextInputAutocapitalization = .sentences
     var autocorrectionDisabled: Bool = false
@@ -96,7 +73,7 @@ struct StyledTextField: View {
                         .foregroundStyle(.primary)
                         .padding(.horizontal, 16)
                         .frame(height: 48)
-                        .background(fieldFill, in: fieldShape)
+                        .background(CostaColors.sheetFieldFill, in: fieldShape)
                         .fixedSize(horizontal: true, vertical: false)
                 }
 
@@ -124,7 +101,7 @@ struct StyledTextField: View {
                 .padding(.horizontal, 20)
                 .frame(height: 48)
                 .frame(maxWidth: .infinity)
-                .background(fieldFill, in: fieldShape)
+                .background(CostaColors.sheetFieldFill, in: fieldShape)
             }
         }
     }
@@ -132,23 +109,13 @@ struct StyledTextField: View {
 
 // MARK: - StyledSelectField
 
-/// A reusable dropdown/select block matching the `StyledTextField` look.
-/// The menu opens anchored to the trailing edge of the field.
-/// When `onAddNew` is set, a trailing "Add new…" action appears; the parent presents any add UI (sheet, navigation, etc.).
-/// Visual variant for `StyledSelectField`.
 enum StyledSelectFieldStyle {
-    /// Adaptive system fill — the default, used for regular form fields.
     case system
-    /// Always-black pill with white text, regardless of light/dark mode —
-    /// used for the receipt-level Category chip, which is meant to stand
-    /// out as a prominent action rather than blend in like a normal field.
     case solidDark
 }
 
 struct StyledSelectField<Option: Hashable>: View {
     var title: String? = nil
-    /// SF Symbol shown instead of `title` text — used when the field's
-    /// label is an icon (e.g. the receipt-level Category field).
     var titleIcon: String? = nil
     @Binding var selection: Option
     let options: [Option]
@@ -200,7 +167,7 @@ struct StyledSelectField<Option: Hashable>: View {
         .padding(.horizontal, 20)
         .frame(maxWidth: .infinity)
         .frame(height: 48)
-        .background(style == .solidDark ? Color.black : fieldFill, in: fieldShape)
+        .background(style == .solidDark ? Color.black : CostaColors.sheetFieldFill, in: fieldShape)
     }
 }
 
@@ -245,7 +212,6 @@ private struct SelectMenuControl<Option: Hashable>: UIViewRepresentable {
     }
 }
 
-/// UIButton subclass anchoring its menu to the trailing edge.
 final class TrailingMenuButton: UIButton {
     override func menuAttachmentPoint(for configuration: UIContextMenuConfiguration) -> CGPoint {
         CGPoint(x: bounds.maxX, y: bounds.minY)
@@ -253,11 +219,6 @@ final class TrailingMenuButton: UIButton {
 }
 
 // MARK: - GlassMenuPicker
-//
-// Used for the small filter chip pattern (e.g. "Last 7 days") that floats
-// over colorful content — kept as `.ultraThinMaterial` on purpose, since
-// that's a different surface than the form fields above (a floating
-// control over a photo/gradient, not a field inside a flat sheet).
 
 struct GlassMenuPicker<Option: Hashable>: View {
     @Binding var selection: Option
@@ -336,11 +297,7 @@ struct GlassMenuLabel: View {
     }
 }
 
-// MARK: - Sheet chrome: drag handle + action buttons
-//
-// New pieces the HiFi design needs that didn't exist yet: the top drag
-// handle, and the bottom Cancel/Save pill pair (replacing navigation-bar
-// toolbar buttons).
+// MARK: - Sheet chrome
 
 struct CostaDragHandle: View {
     var body: some View {
@@ -384,11 +341,6 @@ struct CostaActionButtons: View {
 }
 
 // MARK: - StyledSummaryRow
-//
-// One line in a receipt/cost summary (Subtotal, Tax, Service Charge,
-// Total). `emphasized` bumps it to headline weight for the Total row;
-// `infoText` adds a small info glyph with an accessibility hint for rows
-// like "Tax (10%)" that could use a one-line explanation.
 
 struct StyledSummaryRow: View {
     let label: String
@@ -420,9 +372,6 @@ struct StyledSummaryRow: View {
 }
 
 // MARK: - StyledStatusBadge
-//
-// Small pill used for status like "Auto-detected ✓". Kept generic so it
-// can be reused for other one-word confirmations later (e.g. "Verified").
 
 struct StyledStatusBadge: View {
     let text: String
@@ -437,8 +386,8 @@ struct StyledStatusBadge: View {
                 .font(.caption2.weight(.bold))
         }
         .foregroundStyle(tint)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 15)
+        .padding(.vertical, 10)
         .background(tint.opacity(0.12))
         .overlay(Capsule().stroke(tint, lineWidth: 1))
         .clipShape(.capsule)
@@ -446,14 +395,7 @@ struct StyledStatusBadge: View {
 }
 
 // MARK: - StyledDateField
-//
-// A pill field showing a formatted date (and optionally time) with a
-// calendar glyph. Tapping it opens the system date picker. This overlays
-// an invisible native `DatePicker` on top of the custom-styled label —
-// the same trick apps like Calendar/Reminders use to keep native date
-// picking behavior under a fully custom look. Test this on-device across
-// iOS versions since the overlay/opacity approach can be sensitive to
-// platform changes.
+
 struct StyledDateField: View {
     let title: String
     @Binding var date: Date
@@ -476,7 +418,7 @@ struct StyledDateField: View {
                 }
                 .padding(.horizontal, 20)
                 .frame(height: 48)
-                .background(fieldFill, in: fieldShape)
+                .background(CostaColors.sheetFieldFill, in: fieldShape)
                 .allowsHitTesting(false)
 
                 DatePicker("", selection: $date, displayedComponents: displayedComponents)
@@ -499,7 +441,6 @@ struct StyledDateField: View {
 
 // MARK: - StyledTextArea
 
-/// A multi-line pill-cornered text area, used for free-form notes.
 struct StyledTextArea: View {
     let title: String
     let placeholder: String
@@ -509,33 +450,30 @@ struct StyledTextArea: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.title3.weight(.semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.primary)
 
             ZStack(alignment: .topLeading) {
                 if text.isEmpty {
                     Text(placeholder)
                         .foregroundStyle(Color(uiColor: .placeholderText))
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 20)
                         .padding(.vertical, 14)
                 }
                 TextEditor(text: $text)
                     .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 25)
                     .foregroundStyle(.primary)
             }
             .frame(minHeight: minHeight)
-            .background(fieldFill, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(CostaColors.sheetFieldFill, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
     }
 }
 
 // MARK: - StyledSegmentedToggle
-//
-// A two (or more)-way toggle rendered as separate pill buttons rather
-// than one continuous segmented bar — matches the "Percentage / Fix
-// Amount" control in the charge-editing sheet.
+
 struct StyledSegmentedToggle<Option: Hashable>: View {
     @Binding var selection: Option
     let options: [Option]
@@ -564,11 +502,7 @@ struct StyledSegmentedToggle<Option: Hashable>: View {
 }
 
 // MARK: - CostaAuroraBackground
-//
-// The soft glowing-blob background used on Onboarding/Login. Built with a
-// native RadialGradient + blur rather than an imported SVG/PNG — it's
-// lighter, scales to any screen size, and the color/position can be
-// tweaked per-screen without re-exporting an asset.
+
 struct CostaAuroraBackground: View {
     var glowCenter: UnitPoint = .init(x: 0.5, y: 0.3)
     var glowColor: Color = .blue
@@ -589,10 +523,7 @@ struct CostaAuroraBackground: View {
 }
 
 // MARK: - StyledGradientButton
-//
-// Primary CTA pill with the blue gradient fill used for "Get Started" and
-// "Sign in". Separate from `CostaActionButtons` since that one is a plain
-// solid-accent pill meant for Cancel/Save pairs, not a standalone hero CTA.
+
 struct StyledGradientButton: View {
     let title: String
     var isLoading: Bool = false
@@ -621,16 +552,9 @@ struct StyledGradientButton: View {
 }
 
 // MARK: - CostaImageBackground
-//
-// Full-bleed background image (e.g. an exported PNG gradient/glow asset).
-// Use this instead of `CostaAuroraBackground` when the design calls for a
-// specific pre-rendered look that's easier to nail as an image than to
-// recreate with native gradients.
+
 struct CostaImageBackground: View {
     let imageName: String
-    /// Which part of the (overflowing) image stays visible once it's
-    /// scaled to fill and clipped — e.g. `.top` keeps the top of the
-    /// image in view and crops from the bottom instead of both edges.
     var alignment: Alignment = .center
 
     var body: some View {
@@ -646,10 +570,7 @@ struct CostaImageBackground: View {
 }
 
 // MARK: - StyledNumericKeypad
-//
-// A custom 3x4 numeric keypad (with a "000" quick-zeros key and a
-// backspace key) for money-entry screens that want a fully custom look
-// instead of the system keyboard.
+
 struct StyledNumericKeypad: View {
     let onDigit: (String) -> Void
     let onBackspace: () -> Void
@@ -700,9 +621,7 @@ struct StyledNumericKeypad: View {
 }
 
 // MARK: - StyledAmountChip
-//
-// A quick-pick pill for preset amounts (e.g. "Rp 50.000") shown in a
-// horizontal scroll row above a numeric keypad.
+
 struct StyledAmountChip: View {
     let title: String
     let action: () -> Void
@@ -721,26 +640,19 @@ struct StyledAmountChip: View {
 }
 
 // MARK: - StyledTransactionRow
-//
-// A single transaction row (icon + title/subtitle + amount) in its own
-// rounded card — used by RecentExpensesView, PocketDetailsView, and
-// anywhere else a transaction list shows up.
+
 struct StyledTransactionRow: View {
     let emoji: String
     let colorHex: String?
     let title: String
     let subtitle: String
     let amountText: String
-    /// Optional — when provided, shows the formatted transaction date and
-    /// time under `subtitle`. Defaults to `nil` so existing call sites
-    /// that already bake time into `subtitle` keep working unchanged.
     var date: Date? = nil
 
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-//                    .fill((Color(hex: colorHex ?? "") ?? .blue).opacity(0.3))
                     .fill(CostaColors.circleContainer)
                     .frame(width: 50, height: 50)
                 Text(emoji)
@@ -773,12 +685,7 @@ struct StyledTransactionRow: View {
 }
 
 // MARK: - StyledCategoryAmountRow
-//
-// A category-total row (icon + name + amount, no subtitle) — used
-// anywhere a flat list of "category → how much it cost" shows up:
-// SpendingView's Top Spending list, TopSpendingView's full list, etc.
-// Doesn't wrap itself in a Button — callers that need taps (e.g. to open
-// PocketDetailsView for that category) wrap this in their own Button.
+
 struct StyledCategoryAmountRow: View {
     let emoji: String
     let title: String
@@ -810,11 +717,7 @@ struct StyledCategoryAmountRow: View {
 }
 
 // MARK: - StyledPillMenuPicker
-//
-// A plain dropdown pill — no material/glass, just a subtle flat
-// background — for period pickers like "Today ▾" that sit directly on
-// content rather than floating over a photo/gradient (that's what
-// GlassMenuPicker is for).
+
 struct StyledPillMenuPicker<Option: Hashable>: View {
     @Binding var selection: Option
     let options: [Option]
@@ -837,31 +740,26 @@ struct StyledPillMenuPicker<Option: Hashable>: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 10)
             .padding(.vertical, 10)
-            .background(Color.white.opacity(0.1), in: Capsule())
+            .background(CostaColors.containerBackground.opacity(0.1), in: Capsule())
         }
         .buttonStyle(.plain)
     }
 }
 
 // MARK: - CostaColors
-//
-// Centralized brand color tokens. Reference these (`CostaColors.xxx`)
-// instead of scattering hex literals or ad-hoc `Color.white.opacity(...)`
-// across individual screens, so the palette can be tuned from one place.
+
 enum CostaColors {
-    /// App-wide background — the base fill behind every screen.
     static let appBackground = Color(hex: "#00071F")!
-    /// Tint used for card/container surfaces. Applied at partial opacity
-    /// (see `containerFill`) rather than full-strength, since it's a light
-    /// blue meant to tint a dark card, not paint it solid.
     static let containerBackground = Color(hex: "#A5C2FF")!
-    /// Ready-to-use card fill: `containerBackground` at the opacity that
-    /// reads as a subtle tinted surface on `appBackground`.
     static let containerFill = containerBackground.opacity(0.12)
     static let red = Color(hex: "#FF0004")!
     static let green = Color(hex: "#155728")!
-    /// Fill used behind the emoji icon in `StyledTransactionRow`.
     static let circleContainer = Color(hex: "#0C111C")!
+    /// Fill for text fields / dropdowns inside sheets (StyledTextField,
+    /// StyledSelectField, StyledDateField, StyledTextArea) — a light
+    /// lavender at low opacity, distinct from the bluish `containerFill`
+    /// used for page-level cards/lists.
+    static let sheetFieldFill = Color(hex: "#E8DEF8")!.opacity(0.08)
     static let gradientStart = Color(hex: "#0055FF")!
     static let gradientEnd = Color(hex: "#7E91FF")!
     static let gradient = LinearGradient(
@@ -869,13 +767,7 @@ enum CostaColors {
         startPoint: .leading,
         endPoint: .trailing
     )
-
-    /// Main brand blue, used as the base for monochrome chart palettes
-    /// (e.g. the Spending donut) so slices stay "on-brand" instead of a
-    /// generic rainbow, while still reading as distinct shades.
     static let mainBlue = Color(hex: "#0B5AFE")!
-    /// Shades of `mainBlue`, darkest first — pair with sorted-by-amount
-    /// data so the biggest slice gets the most saturated color.
     static let blueShades: [Color] = [
         Color(hex: "#0B5AFE")!,
         Color(hex: "#3D7DFF")!,
@@ -998,8 +890,6 @@ enum CostaColors {
     }
     return Demo()
 }
-
-// MARK: - Previews
 
 #Preview("StyledTextField") {
     struct Demo: View {

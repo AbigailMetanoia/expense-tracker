@@ -14,7 +14,17 @@ enum ManualExpensePhase {
 struct ManualExpenseFlowView: View {
     @Environment(AuthController.self) private var auth
     @Environment(\.dismiss) private var dismiss
-    @State private var phase: ManualExpensePhase = .loading
+    @State private var phase: ManualExpensePhase
+    /// When `true`, `.task` skips the real network call entirely — set
+    /// automatically when `initialPhase` is provided via the init below,
+    /// so Xcode Previews can jump straight to any phase without needing
+    /// a signed-in `AuthController` or a live API.
+    @State private var skipInitialization: Bool
+
+    init(initialPhase: ManualExpensePhase? = nil) {
+        _phase = State(initialValue: initialPhase ?? .loading)
+        _skipInitialization = State(initialValue: initialPhase != nil)
+    }
 
     var body: some View {
         Group {
@@ -34,6 +44,7 @@ struct ManualExpenseFlowView: View {
             }
         }
         .task {
+            guard !skipInitialization else { return }
             await initializeDraft()
         }
     }
@@ -124,7 +135,41 @@ struct ManualExpenseFlowView: View {
     }
 }
 
-#Preview {
-    ManualExpenseFlowView()
+// MARK: - Previews (no login/network needed)
+
+#Preview("Edit form") {
+    let sampleCost = Cost(
+        id: "draft-1",
+        user_id: nil,
+        name: "Item",
+        amount: 0,
+        currency: "IDR",
+        created_at: nil,
+        updated_at: nil,
+        category_id: "food",
+        category: CostCategory(id: "food", emoji: "🍔", name: "Food", color: "#FF9500", is_generated_by_ai: false)
+    )
+    let sampleExpense = Expense(
+        id: "draft-expense-1",
+        name: "New Expense",
+        date: "2026-09-17",
+        location: "",
+        payment_method: "UNSPECIFIED",
+        notes: nil,
+        is_draft: true,
+        costs: [sampleCost]
+    )
+
+    return ManualExpenseFlowView(initialPhase: .edit(sampleExpense))
+        .environment(AuthController())
+}
+
+#Preview("Loading") {
+    ManualExpenseFlowView(initialPhase: .loading)
+        .environment(AuthController())
+}
+
+#Preview("Failed") {
+    ManualExpenseFlowView(initialPhase: .failed("No expense categories available. Please set up categories first."))
         .environment(AuthController())
 }

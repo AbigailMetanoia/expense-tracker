@@ -82,7 +82,7 @@ struct CategoryFormSheet: View {
                         text: $emoji
                     )
 
-                    colorSection
+//                    colorSection
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 4)

@@ -100,7 +100,7 @@ struct RecentExpensesView: View {
         VStack(spacing: 12) {
             Text(group.label)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(.white.opacity(0.5))
                 .frame(maxWidth: .infinity, alignment: .center)
 
             ForEach(group.items) { tx in

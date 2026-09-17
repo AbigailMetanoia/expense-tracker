@@ -31,7 +31,8 @@ struct AddExpenseOptionsSheet: View {
 
             VStack(spacing: 0) {
                 optionRow(
-                    icon: "camera.fill",
+//                    icon: "camera.fill",
+                    icon: "📸",
                     iconTint: snapReceiptTint,
                     title: "Snap Receipt",
                     subtitle: "Use your camera to quickly capture expense details."
@@ -43,7 +44,8 @@ struct AddExpenseOptionsSheet: View {
                 sheetDivider
 
                 optionRow(
-                    icon: "photo.on.rectangle.angled",
+//                    icon: "photo.on.rectangle.angled",
+                    icon: "🖼️",
                     iconTint: uploadGalleryTint,
                     title: "Upload from Gallery",
                     subtitle: "Add up to 1 receipt at once from your gallery."
@@ -55,8 +57,10 @@ struct AddExpenseOptionsSheet: View {
                 sheetDivider
 
                 optionRow(
-                    icon: "doc.badge.plus",
+//                    icon: "doc.badge.plus",
+                    icon: "🧾",
                     iconTint: enterManuallyTint,
+
                     title: "Enter Manually",
                     subtitle: "Manually input your transaction details."
                 ) {
@@ -89,7 +93,7 @@ struct AddExpenseOptionsSheet: View {
     private var sheetDivider: some View {
         Divider()
             .overlay(dividerColor)
-            .padding(.leading, 84)
+            .padding(.leading, 10)
     }
 
     private func optionRow(
@@ -101,10 +105,14 @@ struct AddExpenseOptionsSheet: View {
     ) -> some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 16) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 48, height: 48)
+//                Image(systemName: icon)
+//                    .font(.system(size: 17, weight: .medium))
+//                    .foregroundStyle(.white)
+//                    .frame(width: 49, height: 49)
+//                    .background(Circle().fill(iconTint))
+                Text(icon)
+                    .font(.system(size: 17, weight: .medium))
+                    .frame(width: 49, height: 49)
                     .background(Circle().fill(iconTint))
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -120,8 +128,8 @@ struct AddExpenseOptionsSheet: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 15)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

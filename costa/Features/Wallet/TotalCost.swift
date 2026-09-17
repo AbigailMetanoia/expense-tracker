@@ -37,24 +37,26 @@ struct TotalCostView: View {
 
             VStack(spacing: 0) {
                 header
+                VStack{
+                    Text(periodLabel)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.5))
+                        .padding(.top, 10)
+//                        .padding(.bottom, 16)
 
-                Text(periodLabel)
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.5))
-                    .padding(.top, 4)
-                    .padding(.bottom, 16)
-
-                ScrollView {
-                    if items.isEmpty {
-                        Text("No costs recorded for this period.")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.5))
-                            .padding(.top, 40)
-                    } else {
-                        listCard
-                            .padding(.horizontal, 20)
+                    ScrollView {
+                        if items.isEmpty {
+                            Text("No costs recorded for this period.")
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.5))
+                                .padding(.top, 40)
+                        } else {
+                            listCard
+                                .padding(.horizontal, 20)
+                        }
                     }
                 }
+
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -88,7 +90,7 @@ struct TotalCostView: View {
     // MARK: - List
 
     private var listCard: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 15) {
             ForEach(items) { item in
                 row(item)
             }

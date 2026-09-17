@@ -55,20 +55,18 @@ struct PocketDetailsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    
-                    HStack{
+
+                    HStack(spacing: 15) {
                         backButton
-//                        Text("Budget Pockets")
-//                            .font(.title2.weight(.bold))
-//                            .foregroundStyle(.white)
+                        Text("Budget Details")
+                            .font(.title2.weight(.bold))
+                            .foregroundStyle(.white)
                     }
-                    
 
                     headerCard
 
                     Text("Recent Transactions")
-                        .font(.headline)
-                        .foregroundStyle(.white)
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(.white)
 
                     if transactions.isEmpty {
@@ -112,16 +110,16 @@ struct PocketDetailsView: View {
         HStack(spacing: 14) {
             ZStack {
                 Circle()
-                    .fill((pocketColor).opacity(0.3))
-                    .frame(width: 44, height: 44)
+                    .fill(CostaColors.circleContainer)
+                    .frame(width: 50, height: 50)
                 Text(pocket.category.emoji)
-                    .font(.title3)
+                    .font(.system(size: 24, weight: .regular))
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(pocket.category.name)
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.primary)
 
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text("Rp.")
@@ -140,7 +138,7 @@ struct PocketDetailsView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(CostaColors.containerBackground.opacity(0.1), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private var pocketColor: Color {
@@ -148,25 +146,22 @@ struct PocketDetailsView: View {
     }
 
     // MARK: - Day group
+    //
+    // Each transaction now gets its OWN card with spacing between them,
+    // instead of all rows sharing one big background container.
 
     private func dayGroup(_ group: (label: String, items: [PocketTransaction])) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 15) {
             Text(group.label)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.4))
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(.white.opacity(0.5))
                 .frame(maxWidth: .infinity, alignment: .center)
 
-            VStack(spacing: 0) {
-                ForEach(Array(group.items.enumerated()), id: \.element.id) { index, tx in
+            VStack(spacing: 10) {
+                ForEach(group.items) { tx in
                     transactionRow(tx, dayLabel: group.label)
-                    if index < group.items.count - 1 {
-                        Divider()
-                            .overlay(Color.white.opacity(0.08))
-                            .padding(.leading, 68)
-                    }
                 }
             }
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }
 
@@ -174,8 +169,8 @@ struct PocketDetailsView: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill((Color(hex: tx.colorHex ?? "") ?? pocketColor).opacity(0.3))
-                    .frame(width: 44, height: 44)
+                    .fill(CostaColors.circleContainer)
+                    .frame(width: 49, height: 49)
                 Text(tx.emoji)
                     .font(.title3)
             }
@@ -196,6 +191,7 @@ struct PocketDetailsView: View {
                 .foregroundStyle(.white)
         }
         .padding(14)
+        .background(CostaColors.containerBackground.opacity(0.1), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     // MARK: - Formatting

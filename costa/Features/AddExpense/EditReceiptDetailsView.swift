@@ -298,6 +298,7 @@ struct EditReceiptDetailsView: View {
                                 } else {
                                     Text("Save")
                                         .fontWeight(.semibold)
+                                        .foregroundStyle(.white)
                                 }
                             }
                         }
@@ -321,10 +322,10 @@ struct EditReceiptDetailsView: View {
     // MARK: - Header card
 
     private var headerCard: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 20) {
             thumbnailOverlay
 
-            VStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .center, spacing: 20) {
                 if extraction != nil && source == .scanBill {
                     StyledStatusBadge(text: "Auto-detected", tint: .darkGreen)
                 }
@@ -337,19 +338,25 @@ struct EditReceiptDetailsView: View {
                     Button {
                         categoriesViewModel.isAddingCategory = true
                     } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "square.grid.2x2.fill")
-                                .font(.subheadline)
-                                .foregroundStyle(.blue)
-                            Text("Add category")
-                                .foregroundStyle(.primary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(spacing: 10) {
+                            HStack(spacing: 8){
+                                Image(systemName: "square.grid.2x2.fill")
+                                    .frame(width: 21, height: 21)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.blue)
+                                
+                                Text("Add category")
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            
                             Image(systemName: "chevron.down")
-                                .font(.title3.weight(.semibold))
+                                .font(.caption2.weight(.regular))
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.horizontal, 20)
-                        .frame(height: 48)
+                        .padding(.vertical, 10)
+                        .frame(height: 38)
                         .background(Color(uiColor: .secondarySystemFill), in: Capsule())
                     }
                     .buttonStyle(.plain)
@@ -364,7 +371,7 @@ struct EditReceiptDetailsView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(15)
         .receiptCard()
     }
 
@@ -390,10 +397,11 @@ struct EditReceiptDetailsView: View {
             if source == .scanBill {
                 Button(action: onRetake) {
                     Image(systemName: "camera.fill")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 22, height: 22)
-                        .background(.blue, in: Circle())
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.blue)
+                        .frame(width: 34, height: 34)
+                        .background(.black, in: Circle())
+                        .padding(2)
                         .overlay(Circle().strokeBorder(.white, lineWidth: 1.5))
                 }
                 .offset(x: 4, y: 4)
@@ -572,8 +580,8 @@ struct EditReceiptDetailsView: View {
                     .listRowInsets(EdgeInsets())
                 }
 
-                Divider()
-                    .padding(.horizontal, 16)
+//                Divider()
+//                    .padding(.horizontal, 16)
 
                 StyledSummaryRow(
                     label: "Total",
@@ -619,13 +627,14 @@ struct EditReceiptDetailsView: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.blue)
 
                 if let subtitle {
                     HStack(spacing: 4) {
                         Text(title)
                             .font(.headline)
+                            .foregroundStyle(.white)
                         Text("(\(subtitle))")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -633,6 +642,7 @@ struct EditReceiptDetailsView: View {
                 } else {
                     Text(title)
                         .font(.headline)
+                        .foregroundStyle(.white)
                 }
 
                 Spacer()

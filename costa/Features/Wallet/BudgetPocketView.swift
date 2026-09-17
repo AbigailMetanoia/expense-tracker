@@ -151,19 +151,22 @@ struct BudgetPocketsView: View {
         VStack(alignment: .leading, spacing: 10) {
             ZStack {
                 Circle()
-                    .fill((Color(hex: pocket.category.color ?? "") ?? .blue).opacity(0.25))
+//                    .fill((Color(hex: pocket.category.color ?? "") ?? .blue).opacity(0.25))
+                    .fill(CostaColors.circleContainer)
                     .frame(width: 44, height: 44)
                 Text(pocket.category.emoji)
                     .font(.title3)
             }
+            
+            VStack(alignment: .leading, spacing: 3){
+                Text(pocket.category.name)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.primary)
 
-            Text(pocket.category.name)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.white)
-
-            Text(percentText(pocket))
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.5))
+                Text(percentText(pocket))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
 
             Text("Rp " + formatted(pocket.amount))
                 .font(.body.weight(.bold))
@@ -171,7 +174,7 @@ struct BudgetPocketsView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(CostaColors.containerBackground.opacity(0.1), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     // MARK: - Add pocket card
@@ -184,15 +187,15 @@ struct BudgetPocketsView: View {
                 Image(systemName: "plus")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 50, height: 50)
                     .background(Color.white.opacity(0.12), in: Circle())
 
                 Text("Add Budget Pocket")
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.white.opacity(0.6))
             }
             .frame(maxWidth: .infinity, minHeight: 130)
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(CostaColors.containerBackground.opacity(0.1), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(.plain)
     }

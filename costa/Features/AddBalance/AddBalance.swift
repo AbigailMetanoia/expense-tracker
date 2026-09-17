@@ -92,7 +92,7 @@ struct AddBalanceView: View {
             Spacer()
 
             Text("Top Up Balance")
-                .font(.headline)
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
 
             Spacer()
@@ -110,18 +110,18 @@ struct AddBalanceView: View {
         VStack(spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text("Rp.")
-                    .font(.title2.weight(.bold))
+                    .font(.title.weight(.bold))
                     .foregroundStyle(.white)
                 Text(formattedInteger)
-                    .font(.system(size: 42, weight: .bold))
+                    .font(.system(size: 43, weight: .bold))
                     .foregroundStyle(.white)
                 Text(",00")
-                    .font(.title2.weight(.semibold))
+                    .font(.title.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.4))
             }
             Text("Enter Amount")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.5))
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(.white.opacity(0.6))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 100)
@@ -132,7 +132,7 @@ struct AddBalanceView: View {
 
     private var presetRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: 11) {
                 ForEach(presetAmounts, id: \.self) { amount in
                     StyledAmountChip(title: "Rp " + formatted(amount)) {
                         amountDigits = String(Int(amount))
