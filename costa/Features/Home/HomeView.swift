@@ -91,65 +91,67 @@ struct HomeView: View {
     }
 
     var body: some View {
-        ZStack {
-            CostaAuroraBackground(glowCenter: UnitPoint(x: 0.5, y: 0.05), glowColor: .blue)
+        NavigationStack {
+            ZStack {
+                CostaAuroraBackground(glowCenter: UnitPoint(x: 0.5, y: 0.05), glowColor: .blue)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    headerSection
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        headerSection
+                            .padding(.horizontal, 20)
+                            .padding(.top, 8)
 
-                    filterChip
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
+                        filterChip
+                            .padding(.horizontal, 20)
+                            .padding(.top, 16)
 
-                    summaryCard
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
+                        summaryCard
+                            .padding(.horizontal, 20)
+                            .padding(.top, 16)
 
-                    incomeExpenseRow
-                        .padding(.horizontal, 20)
-                        .padding(.top, 14)
+                        incomeExpenseRow
+                            .padding(.horizontal, 20)
+                            .padding(.top, 14)
 
-                    recentSection
-                        .padding(.horizontal, 20)
-                        .padding(.top, 24)
-                        .padding(.bottom, 100) // room above the floating tab bar
+                        recentSection
+                            .padding(.horizontal, 20)
+                            .padding(.top, 24)
+                            .padding(.bottom, 100) // room above the floating tab bar
+                    }
                 }
             }
-        }
-        .refreshable { await reload() }
-        .task(id: selectedFilter) {
-            guard let token = await auth.validToken() else { return }
-            await viewModel.load(accessToken: token, chartDays: selectedFilter.chartDays)
-        }
-        .onChange(of: refreshCostsToken) { _, _ in
-            Task {
+            .refreshable { await reload() }
+            .task(id: selectedFilter) {
                 guard let token = await auth.validToken() else { return }
                 await viewModel.load(accessToken: token, chartDays: selectedFilter.chartDays)
             }
-        }
-        .overlay {
-            if viewModel.isLoading && viewModel.rows.isEmpty {
-                ProgressView().tint(.white)
+            .onChange(of: refreshCostsToken) { _, _ in
+                Task {
+                    guard let token = await auth.validToken() else { return }
+                    await viewModel.load(accessToken: token, chartDays: selectedFilter.chartDays)
+                }
             }
-        }
-        .alert("Sign Out", isPresented: $showSignOutConfirmation) {
-            Button("Sign Out", role: .destructive) {
-                Task { await auth.signOut() }
+            .overlay {
+                if viewModel.isLoading && viewModel.rows.isEmpty {
+                    ProgressView().tint(.white)
+                }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(auth.user?.email ?? "Are you sure you want to sign out?")
-        }
-        .sheet(isPresented: $showRecentExpenses) {
-            // NOTE: RecentExpensesView takes `[PocketTransaction]`, a
-            // lighter display model, while Home works with real `[Cost]`.
-            // This maps one to the other for display only — swap in a
-            // real transaction fetch here if RecentExpensesView should
-            // show more than what's already loaded on Home.
-            RecentExpensesView(transactions: displayedRecentCosts.map { $0.asPocketTransaction() })
+            .alert("Sign Out", isPresented: $showSignOutConfirmation) {
+                Button("Sign Out", role: .destructive) {
+                    Task { await auth.signOut() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(auth.user?.email ?? "Are you sure you want to sign out?")
+            }
+            .navigationDestination(isPresented: $showRecentExpenses) {
+                // NOTE: RecentExpensesView takes `[PocketTransaction]`, a
+                // lighter display model, while Home works with real `[Cost]`.
+                // This maps one to the other for display only — swap in a
+                // real transaction fetch here if RecentExpensesView should
+                // show more than what's already loaded on Home.
+                RecentExpensesView(transactions: displayedRecentCosts.map { $0.asPocketTransaction() })
+            }
         }
     }
 
@@ -165,7 +167,7 @@ struct HomeView: View {
                 }
 
             Text("Hello, \(firstName) \u{1F44B}")
-                .font(.system(size: 21, weight: .bold))
+                .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(.primary)
 
             Spacer()

@@ -40,7 +40,7 @@ struct TotalCostView: View {
                 VStack{
                     Text(periodLabel)
                         .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white.opacity(0.7))
                         .padding(.top, 10)
 //                        .padding(.bottom, 16)
 
@@ -104,8 +104,9 @@ struct TotalCostView: View {
             HStack(spacing: 14) {
                 ZStack {
                     Circle()
-                        .fill((Color(hex: item.category.color ?? "") ?? .blue).opacity(0.3))
-                        .frame(width: 44, height: 44)
+//                        .fill((Color(hex: item.category.color ?? "") ?? .blue).opacity(0.3))
+                        .fill(CostaColors.circleContainer)
+                        .frame(width: 50, height: 50)
                     Text(item.category.emoji)
                         .font(.title3)
                 }
@@ -121,7 +122,7 @@ struct TotalCostView: View {
                     .foregroundStyle(.white)
             }
             .padding(16)
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(CostaColors.containerBackground.opacity(0.1), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

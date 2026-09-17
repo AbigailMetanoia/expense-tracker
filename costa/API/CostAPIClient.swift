@@ -95,6 +95,25 @@ struct CostAPIClient: Sendable {
         return try await execute(request, as: CostOneResponse.self).cost
     }
 
+    /// Deletes a single cost/line-item.
+    ///
+    /// NOTE: this assumes the DELETE endpoint lives at the same path as
+    /// `patchCost` (`api/cost/{id}`), just with the DELETE HTTP method —
+    /// matching typical REST conventions. If your backend uses a
+    /// different path (e.g. `api/costs/{id}` or a nested route under the
+    /// parent expense), update the path below to match.
+    ///
+    /// Doesn't decode a response body since DELETE endpoints commonly
+    /// return 204 No Content (or an empty body) rather than JSON — only
+    /// the HTTP status code is checked.
+    func deleteCost(id: String) async throws {
+        let url = baseURL.appending(path: "api/cost/\(id)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        try await executeNoContent(request)
+    }
+
     // MARK: - AI extraction
 
     func fromBill(imageJPEG: Data, fileName: String = "receipt.jpg") async throws -> FromBillResponse {
@@ -144,6 +163,24 @@ struct CostAPIClient: Sendable {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
             throw CostAPIError.decoding(error)
+        }
+    }
+
+    /// Same status-code handling as `execute(_:as:)`, but for endpoints
+    /// that don't return a decodable JSON body (e.g. DELETE returning 204).
+    private func executeNoContent(_ request: URLRequest) async throws {
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw CostAPIError.transport(error)
+        }
+        let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200 ..< 300).contains(code) else {
+            if let env = try? JSONDecoder().decode(APIErrorEnvelope.self, from: data) {
+                throw CostAPIError.httpStatus(code, env.error)
+            }
+            throw CostAPIError.httpStatus(code, String(data: data, encoding: .utf8))
         }
     }
 }

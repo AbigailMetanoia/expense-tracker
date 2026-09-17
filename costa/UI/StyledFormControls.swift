@@ -125,14 +125,19 @@ struct StyledSelectField<Option: Hashable>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let titleIcon {
-                Image(systemName: titleIcon)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.blue)
-            } else if let title {
-                Text(title)
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.primary)
+            if titleIcon != nil || title != nil {
+                HStack(spacing: 6) {
+                    if let titleIcon {
+                        Image(systemName: titleIcon)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.blue)
+                    }
+                    if let title {
+                        Text(title)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(.primary)
+                    }
+                }
             }
 
             ZStack {
@@ -755,10 +760,6 @@ enum CostaColors {
     static let red = Color(hex: "#FF0004")!
     static let green = Color(hex: "#155728")!
     static let circleContainer = Color(hex: "#0C111C")!
-    /// Fill for text fields / dropdowns inside sheets (StyledTextField,
-    /// StyledSelectField, StyledDateField, StyledTextArea) — a light
-    /// lavender at low opacity, distinct from the bluish `containerFill`
-    /// used for page-level cards/lists.
     static let sheetFieldFill = Color(hex: "#E8DEF8")!.opacity(0.08)
     static let gradientStart = Color(hex: "#0055FF")!
     static let gradientEnd = Color(hex: "#7E91FF")!

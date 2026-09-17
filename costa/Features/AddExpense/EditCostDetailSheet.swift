@@ -56,7 +56,7 @@ struct EditCostDetailSheet: View {
                         .foregroundStyle(.secondary)
 
                     // Category selector with add mode
-                    if viewModel.categories.isEmpty {
+                    if categoryOptions.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Category")
                                 .font(.callout.weight(.semibold))
@@ -77,7 +77,7 @@ struct EditCostDetailSheet: View {
                         StyledSelectField(
                             title: "Category",
                             selection: $viewModel.selectedCategory,
-                            options: viewModel.categories,
+                            options: categoryOptions,
                             optionLabel: { $0.name },
                             onAddNew: { viewModel.isAddingCategory = true }
                         )
@@ -152,6 +152,21 @@ struct EditCostDetailSheet: View {
             guard let token = await auth.validToken() else { return }
             await viewModel.loadCategories(accessToken: token)
         }
+    }
+
+    /// Options for the Category dropdown: whatever `viewModel.categories`
+    /// has loaded so far, PLUS the category already assigned to this item
+    /// (if any) — so the dropdown shows up immediately with at least one
+    /// valid option even before `loadCategories(accessToken:)` finishes,
+    /// instead of briefly falling back to the "Add category" empty state
+    /// just because the network call hadn't resolved yet.
+    private var categoryOptions: [CostCategory] {
+        var options = viewModel.categories
+        let current = viewModel.selectedCategory
+        if let id = current.id, !id.isEmpty, !options.contains(where: { $0.id == id }) {
+            options.insert(current, at: 0)
+        }
+        return options
     }
 
     private func saveAndDismiss() async {

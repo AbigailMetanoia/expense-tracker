@@ -82,31 +82,33 @@ struct SpendingView: View {
     }
 
     var body: some View {
-        ZStack {
-            CostaAuroraBackground(glowCenter: UnitPoint(x: 0.5, y: 0.05), glowColor: .blue)
+        NavigationStack {
+            ZStack {
+                CostaAuroraBackground(glowCenter: UnitPoint(x: 0.5, y: 0.05), glowColor: .blue)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    header
-                    periodPicker
-                    summaryCard
-                    topSpendingSection
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        header
+                        periodPicker
+                        summaryCard
+                        topSpendingSection
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 100) // room above the floating tab bar
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 100) // room above the floating tab bar
             }
-        }
-        .task {
-            guard let token = await auth.validToken() else { return }
-            await viewModel.load(accessToken: token, chartDays: 7)
-        }
-        .refreshable {
-            guard let token = await auth.validToken() else { return }
-            await viewModel.load(accessToken: token, chartDays: 7)
-        }
-        .sheet(isPresented: $showTopSpending) {
-            TopSpendingView(categories: categoryBreakdown)
+            .task {
+                guard let token = await auth.validToken() else { return }
+                await viewModel.load(accessToken: token, chartDays: 7)
+            }
+            .refreshable {
+                guard let token = await auth.validToken() else { return }
+                await viewModel.load(accessToken: token, chartDays: 7)
+            }
+            .navigationDestination(isPresented: $showTopSpending) {
+                TopSpendingView(categories: categoryBreakdown)
+            }
         }
     }
 

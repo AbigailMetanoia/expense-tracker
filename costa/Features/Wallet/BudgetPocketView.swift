@@ -3,24 +3,25 @@
 //  costa
 //
 //  Grid of per-category budget "pockets". Tapping a pocket opens
-//  CategoryFormSheet in edit mode (pre-filled); "Add Budget Pocket" opens
-//  the same sheet in add mode. Persisting to the backend is left to the
-//  caller via `onSave`, same pattern as the other sheets in this app.
+//  BudgetAmountSheet (pre-filled) to change its budget limit. "Add Budget
+//  Pocket" attaches a budget to one of the user's EXISTING categories —
+//  it never fabricates a new category with a random id, which is what
+//  previously caused budgets to silently stop matching real costs.
 //
 
 import SwiftUI
 
 /// A category paired with the amount budgeted for it. This is a local
 /// display model — `CostCategory` itself doesn't carry a budget amount
-/// yet (see the NOTE on `CategoryFormSheet`'s `budget` parameter).
+/// yet (there's no budget endpoint in `CostAPIClient`).
 struct BudgetPocket: Identifiable {
     var id: String
     var category: CostCategory
+    /// Amount spent so far — always computed live from real costs by the
+    /// caller (see `WalletView.spentAmount(for:)`); this view doesn't
+    /// compute it itself since it has no access to cost data.
     var amount: Double
-    /// The budget target for this pocket, used for the progress bar on
-    /// WalletView's pocket cards ("X left" = budgetLimit - amount).
-    /// Defaults to 0 (no progress shown) for call sites that only care
-    /// about `amount` (BudgetPocketsView, TotalCostView).
+    /// The budget target for this pocket.
     var budgetLimit: Double = 0
 }
 
@@ -28,12 +29,14 @@ struct BudgetPocketsView: View {
     @Environment(\.dismiss) private var dismiss
 
     private enum ActiveSheet: Identifiable {
-        case add
+        case pickCategory
+        case setBudget(CostCategory, existingLimit: Double)
         case edit(BudgetPocket)
 
         var id: String {
             switch self {
-            case .add: "add"
+            case .pickCategory: "pick"
+            case .setBudget(let category, _): "set-\(category.id ?? category.name)"
             case .edit(let pocket): "edit-\(pocket.id)"
             }
         }
@@ -42,21 +45,33 @@ struct BudgetPocketsView: View {
     @State private var pockets: [BudgetPocket]
     @State private var activeSheet: ActiveSheet?
 
+    /// All real categories in the workspace (from `listCategories()`),
+    /// used to populate the "Add Budget Pocket" picker with categories
+    /// that don't already have a pocket.
+    let allCategories: [CostCategory]
     let currency: String
     let onSave: (BudgetPocket) -> Void
 
     init(
         pockets: [BudgetPocket] = [],
+        allCategories: [CostCategory] = [],
         currency: String = "IDR",
         onSave: @escaping (BudgetPocket) -> Void
     ) {
         _pockets = State(initialValue: pockets)
+        self.allCategories = allCategories
         self.currency = currency
         self.onSave = onSave
     }
 
-    private var totalAmount: Double {
-        pockets.reduce(0) { $0 + $1.amount }
+    private var totalBudget: Double {
+        pockets.reduce(0) { $0 + $1.budgetLimit }
+    }
+
+    private var availableCategories: [CostCategory] {
+        allCategories.filter { category in
+            !pockets.contains { $0.category.id == category.id }
+        }
     }
 
     var body: some View {
@@ -89,31 +104,39 @@ struct BudgetPocketsView: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
-            case .add:
-                CategoryFormSheet(currency: currency) { name, emoji, colorHex, budget in
-                    let category = CostCategory(
-                        id: UUID().uuidString,
-                        emoji: emoji,
-                        name: name,
-                        color: colorHex,
-                        is_generated_by_ai: false
-                    )
-                    let pocket = BudgetPocket(id: category.id ?? UUID().uuidString, category: category, amount: budget ?? 0)
-                    pockets.append(pocket)
-                    onSave(pocket)
+            case .pickCategory:
+                CategoryPickerSheet(categories: availableCategories) { category in
+                    activeSheet = nil
+                    // Wait for the picker sheet to fully dismiss before
+                    // presenting the budget-amount sheet — presenting both
+                    // in the same tick causes SwiftUI's classic
+                    // ghosted/overlapping-sheet glitch.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        activeSheet = .setBudget(category, existingLimit: 0)
+                    }
+                }
+
+            case .setBudget(let category, let existingLimit):
+                BudgetAmountSheet(category: category, initialAmount: existingLimit, currency: currency) { amount in
+                    if let index = pockets.firstIndex(where: { $0.category.id == category.id }) {
+                        pockets[index].budgetLimit = amount
+                        onSave(pockets[index])
+                    } else {
+                        let pocket = BudgetPocket(
+                            id: category.id ?? UUID().uuidString,
+                            category: category,
+                            amount: 0,
+                            budgetLimit: amount
+                        )
+                        pockets.append(pocket)
+                        onSave(pocket)
+                    }
                 }
 
             case .edit(let pocket):
-                CategoryFormSheet(
-                    existing: pocket.category,
-                    initialBudget: pocket.amount,
-                    currency: currency
-                ) { name, emoji, colorHex, budget in
+                BudgetAmountSheet(category: pocket.category, initialAmount: pocket.budgetLimit, currency: currency) { amount in
                     guard let index = pockets.firstIndex(where: { $0.id == pocket.id }) else { return }
-                    pockets[index].category.name = name
-                    pockets[index].category.emoji = emoji
-                    pockets[index].category.color = colorHex
-                    if let budget { pockets[index].amount = budget }
+                    pockets[index].budgetLimit = amount
                     onSave(pockets[index])
                 }
             }
@@ -151,51 +174,48 @@ struct BudgetPocketsView: View {
         VStack(alignment: .leading, spacing: 10) {
             ZStack {
                 Circle()
-//                    .fill((Color(hex: pocket.category.color ?? "") ?? .blue).opacity(0.25))
-                    .fill(CostaColors.circleContainer)
+                    .fill((Color(hex: pocket.category.color ?? "") ?? .blue).opacity(0.25))
                     .frame(width: 44, height: 44)
                 Text(pocket.category.emoji)
                     .font(.title3)
             }
-            
-            VStack(alignment: .leading, spacing: 3){
-                Text(pocket.category.name)
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(.primary)
 
-                Text(percentText(pocket))
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.6))
-            }
+            Text(pocket.category.name)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
 
-            Text("Rp " + formatted(pocket.amount))
+            Text(percentText(pocket))
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.5))
+
+            Text("Rp " + formatted(pocket.budgetLimit))
                 .font(.body.weight(.bold))
                 .foregroundStyle(.white)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(CostaColors.containerBackground.opacity(0.1), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     // MARK: - Add pocket card
 
     private var addPocketCard: some View {
         Button {
-            activeSheet = .add
+            activeSheet = .pickCategory
         } label: {
             VStack(spacing: 10) {
                 Image(systemName: "plus")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
-                    .frame(width: 50, height: 50)
+                    .frame(width: 44, height: 44)
                     .background(Color.white.opacity(0.12), in: Circle())
 
                 Text("Add Budget Pocket")
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.white.opacity(0.7))
             }
             .frame(maxWidth: .infinity, minHeight: 130)
-            .background(CostaColors.containerBackground.opacity(0.1), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -203,8 +223,8 @@ struct BudgetPocketsView: View {
     // MARK: - Formatting
 
     private func percentText(_ pocket: BudgetPocket) -> String {
-        guard totalAmount > 0 else { return "0% of total" }
-        let percent = (pocket.amount / totalAmount) * 100
+        guard totalBudget > 0 else { return "0% of total" }
+        let percent = (pocket.budgetLimit / totalBudget) * 100
         return String(format: "%.0f%% of total", percent)
     }
 
@@ -219,13 +239,14 @@ struct BudgetPocketsView: View {
 
 #Preview {
     NavigationStack {
+        let categories = [
+            CostCategory(id: "1", emoji: "🛍️", name: "Groceries", color: "#2E7D32", is_generated_by_ai: false),
+            CostCategory(id: "2", emoji: "🍔", name: "Dining", color: "#C62828", is_generated_by_ai: false),
+            CostCategory(id: "3", emoji: "🚌", name: "Transport", color: "#00796B", is_generated_by_ai: false)
+        ]
         BudgetPocketsView(
-            pockets: [
-                BudgetPocket(id: "1", category: CostCategory(id: "1", emoji: "🛍️", name: "Groceries", color: "#2E7D32", is_generated_by_ai: false), amount: 900_000),
-                BudgetPocket(id: "2", category: CostCategory(id: "2", emoji: "🍔", name: "Groceries", color: "#C62828", is_generated_by_ai: false), amount: 900_000),
-                BudgetPocket(id: "3", category: CostCategory(id: "3", emoji: "🛶", name: "Groceries", color: "#00796B", is_generated_by_ai: false), amount: 900_000),
-                BudgetPocket(id: "4", category: CostCategory(id: "4", emoji: "🚒", name: "Groceries", color: "#1565C0", is_generated_by_ai: false), amount: 900_000)
-            ]
+            pockets: [BudgetPocket(id: "1", category: categories[0], amount: 0, budgetLimit: 900_000)],
+            allCategories: categories
         ) { pocket in
             print("Saved pocket: \(pocket)")
         }

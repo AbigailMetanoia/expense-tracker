@@ -118,9 +118,9 @@ private struct TabBar: View {
     @Binding var showAddSheet: Bool
     var namespace: Namespace.ID
 
-    /// Solid dark track/FAB fill — replaces the previous ultraThinMaterial
-    /// glass stack. The HiFi wants a flat dark capsule, not a frosted one.
-    private let barFill = Color(red: 0.07, green: 0.09, blue: 0.13)
+    /// Tint tipis di atas material blur — turunin/naikin `opacity` di sini
+    /// untuk atur seberapa "tembus pandang" glass effect-nya ke background.
+    private let barTint = Color(red: 0.07, green: 0.09, blue: 0.13).opacity(0.35)
     private let barStroke = Color.white.opacity(0.08)
 
     var body: some View {
@@ -136,7 +136,11 @@ private struct TabBar: View {
                 }
             }
             .padding(6)
-            .background(barFill, in: Capsule())
+            .background {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay(Capsule().fill(barTint))
+            }
             .overlay(Capsule().strokeBorder(barStroke, lineWidth: 1))
 
             // FAB
@@ -147,7 +151,11 @@ private struct TabBar: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 56, height: 56)
-                    .background(barFill, in: Circle())
+                    .background {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .overlay(Circle().fill(barTint))
+                    }
                     .overlay(Circle().strokeBorder(barStroke, lineWidth: 1))
             }
             .buttonStyle(.plain)

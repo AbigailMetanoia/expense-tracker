@@ -38,16 +38,20 @@ struct WalletView: View {
     @State private var showAllBudgets = false
     @State private var showAllTotalCost = false
 
-    // NOTE: none of these three exist in the current API — there's no
+    // NOTE: none of these exist in the current API — there's no
     // wallet/balance/income endpoint in `CostAPIClient`. They're local
     // state so the screen is fully interactive, but nothing here
     // persists yet. Wire these to real data once the backend supports it.
     @State private var totalBalance: Double = 20_000_000
     @State private var incomeTotal: Double = 7_000_000
-    @State private var pockets: [BudgetPocket] = [
-        BudgetPocket(id: "groceries", category: CostCategory(id: "groceries", emoji: "🛍️", name: "Groceries", color: "#00796B", is_generated_by_ai: false), amount: 120_000, budgetLimit: 170_000),
-        BudgetPocket(id: "house", category: CostCategory(id: "house", emoji: "🏠", name: "House", color: "#AD1457", is_generated_by_ai: false), amount: 1_000_000, budgetLimit: 1_500_000)
-    ]
+
+    /// Budget pockets, built ONLY from real categories fetched via
+    /// `listCategories()` — never hardcoded — so `pocket.category.id`
+    /// always matches the `category_id` used on actual `Cost` records.
+    @State private var pockets: [BudgetPocket] = []
+    /// All categories in the workspace, used both to build `pockets` and
+    /// to populate the "Add Budget Pocket" picker in `BudgetPocketsView`.
+    @State private var allCategories: [CostCategory] = []
 
     init(viewModel: HomeViewModel = HomeViewModel()) {
         _homeViewModel = State(initialValue: viewModel)
@@ -69,9 +73,7 @@ struct WalletView: View {
         displayedRows.reduce(0) { $0 + $1.cost.amount }
     }
 
-    /// "Total Cost" breakdown — this one IS derivable from real data
-    /// (grouping the loaded costs by category), unlike the budget pockets
-    /// above.
+    /// "Total Cost" breakdown — derived from real loaded costs.
     private var totalCostItems: [BudgetPocket] {
         var totals: [String: (category: CostCategory?, amount: Double)] = [:]
         var order: [String] = []
@@ -92,46 +94,95 @@ struct WalletView: View {
     }
 
     var body: some View {
-        ZStack {
-            CostaAuroraBackground(glowCenter: UnitPoint(x: 0.5, y: 0.05), glowColor: .blue)
+        NavigationStack {
+            ZStack {
+                CostaAuroraBackground(glowCenter: UnitPoint(x: 0.5, y: 0.05), glowColor: .blue)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    header
-                    balanceCard
-                    budgetSection
-                    totalCostSection
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 100) // room above the floating tab bar
-            }
-        }
-        .task {
-            guard let token = await auth.validToken() else { return }
-            await homeViewModel.load(accessToken: token, chartDays: 7)
-        }
-        .refreshable {
-            guard let token = await auth.validToken() else { return }
-            await homeViewModel.load(accessToken: token, chartDays: 7)
-        }
-        .sheet(isPresented: $showAddBalance) {
-            AddBalanceView { amount in
-                totalBalance += amount
-            }
-        }
-        .sheet(isPresented: $showAllBudgets) {
-            BudgetPocketsView(pockets: pockets, currency: currencyCode) { updated in
-                if let i = pockets.firstIndex(where: { $0.id == updated.id }) {
-                    pockets[i] = updated
-                } else {
-                    pockets.append(updated)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        header
+                        balanceCard
+                        budgetSection
+                        totalCostSection
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 100) // room above the floating tab bar
                 }
             }
+            .task {
+                guard let token = await auth.validToken() else { return }
+                await homeViewModel.load(accessToken: token, chartDays: 7)
+                await loadPockets(accessToken: token)
+            }
+            .refreshable {
+                guard let token = await auth.validToken() else { return }
+                await homeViewModel.load(accessToken: token, chartDays: 7)
+                await loadPockets(accessToken: token)
+            }
+            .sheet(isPresented: $showAddBalance) {
+                AddBalanceView { amount in
+                    totalBalance += amount
+                }
+            }
+            .navigationDestination(isPresented: $showAllBudgets) {
+                BudgetPocketsView(pockets: pockets, allCategories: allCategories, currency: currencyCode) { updated in
+                    if let i = pockets.firstIndex(where: { $0.id == updated.id }) {
+                        pockets[i] = updated
+                    } else {
+                        pockets.append(updated)
+                    }
+                    saveBudgetLimit(updated.budgetLimit, for: updated.category.id ?? updated.id)
+                }
+            }
+            .navigationDestination(isPresented: $showAllTotalCost) {
+                TotalCostView(periodLabel: selectedPeriod.label, items: totalCostItems, currency: currencyCode)
+            }
         }
-        .sheet(isPresented: $showAllTotalCost) {
-            TotalCostView(periodLabel: selectedPeriod.label, items: totalCostItems, currency: currencyCode)
+    }
+
+    // MARK: - Loading pockets from real categories
+
+    /// Fetches the real category list and builds `pockets` from it,
+    /// merging in whatever budget limits were saved locally. This is
+    /// what guarantees `pocket.category.id` matches `cost.category_id`,
+    /// so `spentAmount(for:)` below actually finds matching costs.
+    private func loadPockets(accessToken: String) async {
+        do {
+            let client = CostAPIClient(accessToken: accessToken)
+            let categories = try await client.listCategories()
+            allCategories = categories
+            let limits = loadBudgetLimits()
+            pockets = categories.compactMap { category -> BudgetPocket? in
+                guard let limit = limits[category.id ?? ""], limit > 0 else { return nil }
+                return BudgetPocket(
+                    id: category.id ?? UUID().uuidString,
+                    category: category,
+                    amount: 0, // recomputed live by spentAmount(for:)
+                    budgetLimit: limit
+                )
+            }
+        } catch {
+            print("Failed to load categories for budget pockets: \(error)")
         }
+    }
+
+    // MARK: - Local budget-limit persistence
+    // NOTE: there's no budget endpoint in `CostAPIClient` yet — only the
+    // budget LIMIT is stored locally (UserDefaults) keyed by real category
+    // id. "Spent" is always computed live from real costs, never stored.
+    // Swap this for a real API call once the backend supports budgets.
+
+    private static let budgetLimitsKey = "costa.budgetLimits"
+
+    private func loadBudgetLimits() -> [String: Double] {
+        (UserDefaults.standard.dictionary(forKey: Self.budgetLimitsKey) as? [String: Double]) ?? [:]
+    }
+
+    private func saveBudgetLimit(_ amount: Double, for categoryId: String) {
+        var limits = loadBudgetLimits()
+        limits[categoryId] = amount
+        UserDefaults.standard.set(limits, forKey: Self.budgetLimitsKey)
     }
 
     // MARK: - Header
@@ -187,20 +238,17 @@ struct WalletView: View {
                     Spacer(minLength: 0)
                 }
             }
-            
 
             HStack {
                 Spacer()
                 StyledPillMenuPicker(selection: $selectedPeriod, options: Period.allCases) { $0.label }
             }
 
-//            Divider().overlay(Color.white.opacity(0.15))
-
             HStack(spacing: 10) {
                 statColumn(title: "Income", periodLabel: selectedPeriod.label, amount: incomeTotal, icon: "arrow.up", tint: CostaColors.green)
-                
+
                 Divider().overlay(Color.white.opacity(0.15))
-                
+
                 statColumn(title: "Expenses", periodLabel: selectedPeriod.label, amount: expensesTotal, icon: "arrow.down", tint: CostaColors.red)
             }
         }
@@ -263,8 +311,9 @@ struct WalletView: View {
     }
 
     /// Real amount spent so far in `pocket.category`, within the current
-    /// period — computed from actual loaded costs, unlike `budgetLimit`
-    /// which is still a locally-set target (no budget API yet).
+    /// period — computed live from actual loaded costs. This now works
+    /// correctly because `pocket.category.id` comes from the same real
+    /// category list that costs are tagged with.
     private func spentAmount(for pocket: BudgetPocket) -> Double {
         displayedRows
             .filter { row in
@@ -282,13 +331,12 @@ struct WalletView: View {
         return VStack(alignment: .leading, spacing: 10) {
             ZStack {
                 Circle()
-//                    .fill((Color(hex: pocket.category.color ?? "") ?? .blue).opacity(0.3))
                     .fill(CostaColors.circleContainer)
                     .frame(width: 40, height: 40)
                 Text(pocket.category.emoji)
                     .font(.system(size: 21, weight: .regular))
             }
-            
+
             VStack(alignment: .leading, spacing: 3){
                 Text(pocket.category.name)
                     .font(.system(size: 16, weight: .regular))

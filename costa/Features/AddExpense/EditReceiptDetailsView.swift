@@ -322,10 +322,10 @@ struct EditReceiptDetailsView: View {
     // MARK: - Header card
 
     private var headerCard: some View {
-        HStack(alignment: .top, spacing: 20) {
+        HStack(alignment: .top, spacing: 12) {
             thumbnailOverlay
 
-            VStack(alignment: .center, spacing: 20) {
+            VStack(alignment: .center, spacing: 15) {
                 if extraction != nil && source == .scanBill {
                     StyledStatusBadge(text: "Auto-detected", tint: .darkGreen)
                 }
@@ -338,31 +338,26 @@ struct EditReceiptDetailsView: View {
                     Button {
                         categoriesViewModel.isAddingCategory = true
                     } label: {
-                        HStack(spacing: 10) {
-                            HStack(spacing: 8){
-                                Image(systemName: "square.grid.2x2.fill")
-                                    .frame(width: 21, height: 21)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.blue)
-                                
-                                Text("Add category")
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            
+                        HStack(spacing: 12) {
+                            Image(systemName: "square.grid.2x2.fill")
+                                .font(.subheadline)
+                                .foregroundStyle(.blue)
+                            Text("Add category")
+                                .font(.subheadline.weight(.regular))
+                                .foregroundStyle(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             Image(systemName: "chevron.down")
-                                .font(.caption2.weight(.regular))
+                                .font(.system(size: 14, weight: .regular))
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .frame(height: 38)
+                        .frame(height: 48)
                         .background(Color(uiColor: .secondarySystemFill), in: Capsule())
                     }
                     .buttonStyle(.plain)
                 } else {
                     StyledSelectField(
-                        titleIcon: "square.grid.2x2.fill",
+                        title: "Category", titleIcon: "square.grid.2x2.fill",
                         selection: overallCategoryBinding,
                         options: categoriesViewModel.categories,
                         optionLabel: { $0.name },
@@ -371,7 +366,7 @@ struct EditReceiptDetailsView: View {
                 }
             }
         }
-        .padding(15)
+        .padding(16)
         .receiptCard()
     }
 
@@ -392,19 +387,18 @@ struct EditReceiptDetailsView: View {
             Image(uiImage: thumbnail)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 64, height: 64)
+                .frame(width: 98, height: 100)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             if source == .scanBill {
                 Button(action: onRetake) {
                     Image(systemName: "camera.fill")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(.blue)
-                        .frame(width: 34, height: 34)
-                        .background(.black, in: Circle())
-                        .padding(2)
+                        .frame(width: 35, height: 35)
+                        .background(.white.opacity(0.1), in: Circle())
                         .overlay(Circle().strokeBorder(.white, lineWidth: 1.5))
                 }
-                .offset(x: 4, y: 4)
+                .offset(x: -5, y: 4)
                 .accessibilityLabel("Retake photo")
             }
         }
@@ -627,14 +621,13 @@ struct EditReceiptDetailsView: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.blue)
 
                 if let subtitle {
                     HStack(spacing: 4) {
                         Text(title)
                             .font(.headline)
-                            .foregroundStyle(.white)
                         Text("(\(subtitle))")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -642,7 +635,6 @@ struct EditReceiptDetailsView: View {
                 } else {
                     Text(title)
                         .font(.headline)
-                        .foregroundStyle(.white)
                 }
 
                 Spacer()
@@ -700,6 +692,18 @@ struct EditReceiptDetailsView: View {
                         category_id: editCost.category_id
                     )
                 )
+            }
+
+            // Items removed locally (via swipe-to-delete) also need to be
+            // deleted server-side — without this, "deleting" an item only
+            // ever removed it from the on-screen list, and it would come
+            // back the next time this receipt was loaded.
+            // NOTE: `client.deleteCost(id:)` is assumed to match your
+            // `CostAPIClient`'s naming — rename this call if your actual
+            // delete method is named differently.
+            let remainingIds = Set(editCosts.map(\.id))
+            for original in originalExpense.costs where !remainingIds.contains(original.id) {
+                try await client.deleteCost(id: original.id)
             }
 
             // NOTE: `charges` (tax/service) aren't persisted yet — see the
