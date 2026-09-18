@@ -507,29 +507,51 @@ struct EditReceiptDetailsView: View {
                     .padding(16)
                     .listRowInsets(EdgeInsets())
                 } else {
+                    // NOTE: this row used to be one big `Button` (tap
+                    // anywhere → open edit sheet) with `.swipeActions`
+                    // attached on top of it. That combination is known to
+                    // be unreliable in SwiftUI — a full-row Button's tap
+                    // gesture competes with the swipe gesture, so delete
+                    // could silently fail to trigger. Splitting the tap
+                    // target (plain view + `.onTapGesture`) from the
+                    // delete icon (its own `Button`) avoids that conflict,
+                    // and also gives a visible way to delete a wrongly
+                    // scanned item without needing to discover swipe.
                     ForEach(editCosts) { cost in
-                        Button(action: { activeSheet = .cost(cost) }) {
-                            HStack(spacing: 10) {
-                                Text("1x")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 28, height: 28)
-                                    .background(.secondary.opacity(0.15), in: Circle())
+                        HStack(spacing: 10) {
+                            Text("1x")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 28, height: 28)
+                                .background(.secondary.opacity(0.15), in: Circle())
 
-                                Text(cost.name)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.primary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(cost.name)
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
 
-                                Text(cost.amountText)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.primary)
-                                    .frame(maxWidth: 90, alignment: .trailing)
+                            Text(cost.amountText)
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                                .frame(maxWidth: 90, alignment: .trailing)
+
+                            if !isReadOnly {
+                                Button {
+                                    deleteCost(cost)
+                                } label: {
+                                    Image(systemName: "minus.circle.fill")
+                                        .font(.system(size: 20))
+                                        .foregroundStyle(.red)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Delete \(cost.name)")
                             }
-                            .rowPadding()
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .rowPadding()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if !isReadOnly { activeSheet = .cost(cost) }
+                        }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             if !isReadOnly {
                                 Button(role: .destructive) {
