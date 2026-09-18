@@ -126,7 +126,7 @@ struct TotalCostView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(onSelect == nil)
+//        .disabled(onSelect == nil)
     }
 
     // MARK: - Formatting

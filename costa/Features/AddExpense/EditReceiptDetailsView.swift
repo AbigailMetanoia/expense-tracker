@@ -11,6 +11,7 @@
 
 import SwiftUI
 import UIKit
+import PhotosUI
 
 // MARK: - Editable cost line
 
@@ -104,6 +105,19 @@ struct EditReceiptDetailsView: View {
     @State private var notesExpanded = true
     @State private var summaryExpanded = true
     @State private var activeSheet: ActiveSheet?
+
+    // MARK: Manual-entry photo attachment
+    // `thumbnail` is a `let`, supplied once at init, so a locally-picked
+    // replacement is tracked separately and preferred for display when
+    // present. Only relevant for `source == .manual`, where there's no
+    // VisionKit scan to retake — the user instead attaches an optional
+    // reference photo from their library.
+    @State private var pickedPhotoItem: PhotosPickerItem?
+    @State private var pickedThumbnail: UIImage?
+
+    private var displayedThumbnail: UIImage {
+        pickedThumbnail ?? thumbnail
+    }
 
     /// Reused purely for its category list/loading/add-new-category
     /// capability (same pattern as `EditCostDetailSheet`) — categories are
@@ -254,6 +268,15 @@ struct EditReceiptDetailsView: View {
                 guard let token = await auth.validToken() else { return }
                 await categoriesViewModel.loadCategories(accessToken: token)
             }
+            .onChange(of: pickedPhotoItem) { _, newItem in
+                guard let newItem else { return }
+                Task {
+                    if let data = try? await newItem.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        pickedThumbnail = image
+                    }
+                }
+            }
             .sheet(isPresented: $categoriesViewModel.isAddingCategory) {
                 CategoryFormSheet(
                     currency: editCosts.first?.currency ?? "IDR",
@@ -384,24 +407,42 @@ struct EditReceiptDetailsView: View {
 
     private var thumbnailOverlay: some View {
         ZStack(alignment: .bottomTrailing) {
-            Image(uiImage: thumbnail)
+            Image(uiImage: displayedThumbnail)
                 .resizable()
                 .scaledToFill()
                 .frame(width: 98, height: 100)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-            if source == .scanBill {
+
+            switch source {
+            case .scanBill:
                 Button(action: onRetake) {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(.blue)
-                        .frame(width: 35, height: 35)
-                        .background(.white.opacity(0.1), in: Circle())
-                        .overlay(Circle().strokeBorder(.white, lineWidth: 1.5))
+                    thumbnailActionIcon("camera.fill")
                 }
                 .offset(x: -5, y: 4)
                 .accessibilityLabel("Retake photo")
+
+            case .manual:
+                // No VisionKit scan to retake here — instead, let the user
+                // optionally attach a reference photo from their library.
+                PhotosPicker(selection: $pickedPhotoItem, matching: .images) {
+                    thumbnailActionIcon(pickedThumbnail == nil ? "photo.badge.plus" : "camera.fill")
+                }
+                .offset(x: -5, y: 4)
+                .accessibilityLabel(pickedThumbnail == nil ? "Add photo" : "Change photo")
             }
         }
+    }
+
+    /// Shared visual style for the small circular action button overlaid
+    /// on the receipt thumbnail, so retake (scan) and add-photo (manual)
+    /// look consistent.
+    private func thumbnailActionIcon(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 14, weight: .regular))
+            .foregroundStyle(.blue)
+            .frame(width: 35, height: 35)
+            .background(.white.opacity(0.1), in: Circle())
+            .overlay(Circle().strokeBorder(.white, lineWidth: 1.5))
     }
 
     // MARK: - Transaction details card (read-only, taps open the edit sheet)
@@ -710,6 +751,11 @@ struct EditReceiptDetailsView: View {
             // comment on `_charges` in `init`. Add the corresponding API
             // call here once the backend model supports it.
 
+            // NOTE: `pickedThumbnail` (manual entry's optional attached
+            // photo) isn't uploaded anywhere yet — there's no receipt-image
+            // endpoint in `CostAPIClient` currently. Wire this up once the
+            // backend supports attaching an image to an `Expense`.
+
             dismiss()
         } catch {
             saveError = error.localizedDescription
@@ -796,6 +842,55 @@ private extension View {
         extraction: extraction,
         thumbnail: UIImage(systemName: "doc.text.viewfinder")!,
         onRetake: {}
+    )
+    .environment(AuthController())
+}
+
+#Preview("Manual Entry") {
+    let sampleCosts: [Cost] = [
+        Cost(id: "c1", name: "Nasi Goreng", amount: 25_000, currency: "IDR")
+    ]
+    let expense = Expense(
+        id: "e2",
+        name: "Manual Expense",
+        date: "2026-09-18",
+        location: "",
+        payment_method: nil,
+        notes: nil,
+        is_draft: true,
+        costs: sampleCosts
+    )
+    EditReceiptDetailsView(
+        expense: expense,
+        extraction: nil,
+        thumbnail: UIImage(systemName: "doc.text.viewfinder")!,
+        onRetake: {},
+        source: .manual
+    )
+    .environment(AuthController())
+}
+
+#Preview("Manual Entry, Read Only") {
+    let sampleCosts: [Cost] = [
+        Cost(id: "c1", name: "Nasi Goreng", amount: 25_000, currency: "IDR")
+    ]
+    let expense = Expense(
+        id: "e3",
+        name: "Manual Expense",
+        date: "2026-09-18",
+        location: "",
+        payment_method: nil,
+        notes: nil,
+        is_draft: false,
+        costs: sampleCosts
+    )
+    EditReceiptDetailsView(
+        expense: expense,
+        extraction: nil,
+        thumbnail: UIImage(systemName: "doc.text.viewfinder")!,
+        onRetake: {},
+        source: .manual,
+        isReadOnly: true
     )
     .environment(AuthController())
 }

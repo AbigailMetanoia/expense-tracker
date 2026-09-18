@@ -4,7 +4,9 @@
 //
 //  Full-screen receipt capture flow:
 //  1. Capture  — live camera
-//  2. Review   — captured photo with an adjustable crop frame
+//  2. Review   — captured photo, with an adjustable crop frame ONLY when
+//                the source didn't already do edge detection (see
+//                `Phase.review`'s `needsCrop` below)
 //  3. Uploading
 //  4a. Low confidence — extraction found no line items; Cancel exits to
 //      Home, Retake goes back to the camera.
@@ -19,7 +21,11 @@ import VisionKit
 struct ReceiptCaptureFlowView: View {
     enum Phase {
         case capture
-        case review(UIImage)
+        /// `needsCrop` distinguishes sources that already did their own
+        /// edge detection/perspective correction (VisionKit's document
+        /// scanner) from sources that didn't (the `UIImagePicker` camera
+        /// fallback, and gallery uploads) — see `reviewPane`.
+        case review(UIImage, needsCrop: Bool)
         case uploading(UIImage)
         case edit(Expense, BillExtraction?, UIImage)
         case lowConfidence(UIImage)
@@ -41,8 +47,8 @@ struct ReceiptCaptureFlowView: View {
             switch phase {
             case .capture:
                 capturePane
-            case .review(let image):
-                reviewPane(for: image)
+            case .review(let image, let needsCrop):
+                reviewPane(for: image, needsCrop: needsCrop)
             case .uploading(let image):
                 uploadingView(for: image)
             case .edit(let expense, let extraction, let image):
@@ -69,7 +75,10 @@ struct ReceiptCaptureFlowView: View {
     private var capturePane: some View {
         if VNDocumentCameraViewController.isSupported {
             DocumentCameraRepresentable(
-                onCapture: { image in phase = .review(image) },
+                // VisionKit already detected the document's edges and
+                // corrected perspective before handing us this image, so
+                // skip the manual crop step entirely.
+                onCapture: { image in phase = .review(image, needsCrop: false) },
                 onCancel: { dismiss() },
                 onFail: { _ in dismiss() }
             )
@@ -77,7 +86,9 @@ struct ReceiptCaptureFlowView: View {
             .id(captureKey)
         } else if UIImagePickerController.isSourceTypeAvailable(.camera) {
             CameraImagePickerRepresentable(
-                onCapture: { phase = .review($0) },
+                // Plain camera capture, no edge detection happened — the
+                // user may still want to crop out background/hands/etc.
+                onCapture: { phase = .review($0, needsCrop: true) },
                 onCancel: { dismiss() }
             )
             .ignoresSafeArea()
@@ -98,9 +109,15 @@ struct ReceiptCaptureFlowView: View {
         }
     }
 
-    // MARK: - 2. Review pane (adjustable crop frame)
+    // MARK: - 2. Review pane
+    //
+    // With `needsCrop == false` (VisionKit source) this is just the photo
+    // plus Retake/Confirm — no frame, matching what the user asked for.
+    // With `needsCrop == true` (fallback camera, or a gallery upload) the
+    // adjustable `ReceiptCropOverlay` is shown so the user can frame the
+    // receipt themselves before it's sent off for extraction.
 
-    private func reviewPane(for image: UIImage) -> some View {
+    private func reviewPane(for image: UIImage, needsCrop: Bool) -> some View {
         GeometryReader { geo in
             let containerSize = geo.size
 
@@ -112,7 +129,9 @@ struct ReceiptCaptureFlowView: View {
                     .scaledToFit()
                     .frame(width: containerSize.width, height: containerSize.height)
 
-                ReceiptCropOverlay(rect: $cropRect, containerSize: containerSize)
+                if needsCrop {
+                    ReceiptCropOverlay(rect: $cropRect, containerSize: containerSize)
+                }
 
                 VStack {
                     HStack {
@@ -149,8 +168,10 @@ struct ReceiptCaptureFlowView: View {
                         Spacer()
 
                         Button {
-                            let cropped = image.cropped(toDisplayRect: cropRect, inContainer: containerSize)
-                            Task { await uploadImage(cropped) }
+                            let output = needsCrop
+                                ? image.cropped(toDisplayRect: cropRect, inContainer: containerSize)
+                                : image
+                            Task { await uploadImage(output) }
                         } label: {
                             Image(systemName: "checkmark")
                                 .font(.title3.weight(.bold))
@@ -165,6 +186,7 @@ struct ReceiptCaptureFlowView: View {
                 }
             }
             .onAppear {
+                guard needsCrop else { return }
                 // Start the crop frame inset ~8% from each edge — a
                 // reasonable default that the user can drag from there.
                 let inset = min(containerSize.width, containerSize.height) * 0.08
@@ -428,6 +450,16 @@ private struct CameraImagePickerRepresentable: UIViewControllerRepresentable {
 
 #Preview("Capture") {
     ReceiptCaptureFlowView()
+        .environment(AuthController())
+}
+
+#Preview("Review — no crop (VisionKit)") {
+    ReceiptCaptureFlowView(initialPhase: .review(previewReceiptPlaceholder(), needsCrop: false))
+        .environment(AuthController())
+}
+
+#Preview("Review — with crop (fallback/gallery)") {
+    ReceiptCaptureFlowView(initialPhase: .review(previewReceiptPlaceholder(), needsCrop: true))
         .environment(AuthController())
 }
 

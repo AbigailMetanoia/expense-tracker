@@ -28,6 +28,18 @@ struct WalletView: View {
         }
     }
 
+    /// One "money added" event, timestamped so it can be filtered by
+    /// `Period` the same way `HomeCostRow` expenses are. Currently this is
+    /// the ONLY thing that counts as Income — there's no income endpoint
+    /// in `CostAPIClient`, so every entry here comes from the user
+    /// confirming an amount in `AddBalanceView`. Swap this for a real
+    /// income model once the backend supports one.
+    private struct IncomeEntry: Identifiable, Codable {
+        var id: String
+        var amount: Double
+        var date: Date
+    }
+
     @Environment(AuthController.self) private var auth
 
     /// Reused for real expense data (category totals, "Total Cost").
@@ -38,12 +50,17 @@ struct WalletView: View {
     @State private var showAllBudgets = false
     @State private var showAllTotalCost = false
 
-    // NOTE: none of these exist in the current API — there's no
-    // wallet/balance/income endpoint in `CostAPIClient`. They're local
-    // state so the screen is fully interactive, but nothing here
-    // persists yet. Wire these to real data once the backend supports it.
+    // NOTE: there's no wallet/balance endpoint in `CostAPIClient`. This is
+    // local state so the screen is fully interactive, but it doesn't
+    // persist yet. Unlike Income below, `totalBalance` is a running total
+    // (not filtered by period) — it represents "how much money exists
+    // right now", not a dated transaction.
     @State private var totalBalance: Double = 20_000_000
-    @State private var incomeTotal: Double = 7_000_000
+
+    /// Every Add Balance confirmation, each with its own date. Persisted
+    /// locally (see `loadIncomeEntries`/`saveIncomeEntries`) so Income
+    /// survives an app relaunch even without a backend.
+    @State private var incomeEntries: [IncomeEntry] = []
 
     /// Budget pockets, built ONLY from real categories fetched via
     /// `listCategories()` — never hardcoded — so `pocket.category.id`
@@ -71,6 +88,18 @@ struct WalletView: View {
 
     private var expensesTotal: Double {
         displayedRows.reduce(0) { $0 + $1.cost.amount }
+    }
+
+    /// Income entries within `selectedPeriod`, same filtering shape as
+    /// `displayedRows` above so Income and Expenses behave consistently
+    /// when the period picker changes.
+    private var displayedIncomeEntries: [IncomeEntry] {
+        let cutoff = selectedPeriod.cutoffDate
+        return incomeEntries.filter { Calendar.current.startOfDay(for: $0.date) >= cutoff }
+    }
+
+    private var incomeTotal: Double {
+        displayedIncomeEntries.reduce(0) { $0 + $1.amount }
     }
 
     /// "Total Cost" breakdown — derived from real loaded costs.
@@ -111,6 +140,10 @@ struct WalletView: View {
                 }
             }
             .task {
+                // Local, doesn't need a token — load it up front so Income
+                // shows correct data as soon as the screen appears.
+                incomeEntries = loadIncomeEntries()
+
                 guard let token = await auth.validToken() else { return }
                 await homeViewModel.load(accessToken: token, chartDays: 7)
                 await loadPockets(accessToken: token)
@@ -123,6 +156,7 @@ struct WalletView: View {
             .sheet(isPresented: $showAddBalance) {
                 AddBalanceView { amount in
                     totalBalance += amount
+                    addIncomeEntry(amount: amount)
                 }
             }
             .navigationDestination(isPresented: $showAllBudgets) {
@@ -183,6 +217,33 @@ struct WalletView: View {
         var limits = loadBudgetLimits()
         limits[categoryId] = amount
         UserDefaults.standard.set(limits, forKey: Self.budgetLimitsKey)
+    }
+
+    // MARK: - Local income persistence
+    // NOTE: same situation as budget limits above — no income endpoint in
+    // `CostAPIClient`, so every Add Balance confirmation is recorded here
+    // as a dated `IncomeEntry` and stored locally (UserDefaults, JSON-
+    // encoded). Swap this for a real API call once the backend supports
+    // income/transactions.
+
+    private static let incomeEntriesKey = "costa.incomeEntries"
+
+    private func loadIncomeEntries() -> [IncomeEntry] {
+        guard let data = UserDefaults.standard.data(forKey: Self.incomeEntriesKey),
+              let entries = try? JSONDecoder().decode([IncomeEntry].self, from: data)
+        else { return [] }
+        return entries
+    }
+
+    private func saveIncomeEntries() {
+        guard let data = try? JSONEncoder().encode(incomeEntries) else { return }
+        UserDefaults.standard.set(data, forKey: Self.incomeEntriesKey)
+    }
+
+    private func addIncomeEntry(amount: Double) {
+        let entry = IncomeEntry(id: UUID().uuidString, amount: amount, date: Date())
+        incomeEntries.append(entry)
+        saveIncomeEntries()
     }
 
     // MARK: - Header

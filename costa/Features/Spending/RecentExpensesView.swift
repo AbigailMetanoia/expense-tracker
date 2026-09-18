@@ -122,7 +122,7 @@ struct RecentExpensesView: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(onSelect == nil)
+//        .disabled(onSelect == nil)
     }
 
     // MARK: - Formatting
